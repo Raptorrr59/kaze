@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package kaze;
+
+option go_package = "projects/kaze/proto";
+
+// --- CORE SERVICE ---
+service KazeService {
+    // Worker -> Master: Announce presence and capabilities
+    rpc RegisterWorker(WorkerInfo) returns (RegisterResponse);
+    
+    // Worker -> Master: Periodic health check
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    
+    // Client -> Master: Submit a new job
+    rpc SubmitJob(JobRequest) returns (JobResponse);
+    
+    // Worker <-> Master: Bi-directional log streaming
+    rpc StreamLogs(stream LogFrame) returns (stream LogControl);
+}
+
+// --- MESSAGES ---
+
+message WorkerInfo {
+    string worker_id = 1;
+    string hostname = 2;
+    int32 cpu_count = 3;
+    int64 ram_bytes = 4;
+    map<string, string> tags = 5;
+}
+
+message RegisterResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message HeartbeatRequest {
+    string worker_id = 1;
+    float cpu_usage = 2;
+    int64 ram_usage_bytes = 3;
+}
+
+message HeartbeatResponse {
+    bool ok = 1;
+}
+
+message JobRequest {
+    string command = 1;
+    string image = 2; // Optional for Docker driver
+    int32 priority = 3;
+}
+
+message JobResponse {
+    string job_id = 1;
+    string status = 2;
+}
+
+message LogFrame {
+    string job_id = 1;
+    string worker_id = 2;
+    string data = 3;
+    string stream_type = 4; // stdout or stderr
+}
+
+message LogControl {
+    bool stop = 1;
+}
