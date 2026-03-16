@@ -17,9 +17,27 @@ service KazeService {
     
     // Worker <-> Master: Bi-directional log streaming
     rpc StreamLogs(stream LogFrame) returns (stream LogControl);
+
+    // Client -> Master: List registered workers
+    rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse);
 }
 
 // --- MESSAGES ---
+
+message ListWorkersRequest {}
+
+message ListWorkersResponse {
+    repeated WorkerStatus workers = 1;
+}
+
+message WorkerStatus {
+    string worker_id = 1;
+    string hostname = 2;
+    string status = 3;
+    float cpu_usage = 4;
+    int64 ram_usage_bytes = 5;
+    int64 last_heartbeat_unix = 6;
+}
 
 message WorkerInfo {
     string worker_id = 1;

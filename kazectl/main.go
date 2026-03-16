@@ -40,6 +40,22 @@ func main() {
 		}
 		log.Printf("Job submitted! ID: %s, Status: %s", resp.JobId, resp.Status)
 
+	case "list-workers":
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		resp, err := client.ListWorkers(ctx, &pb.ListWorkersRequest{})
+		if err != nil {
+			log.Fatalf("could not list workers: %v", err)
+		}
+
+		log.Printf("Registered Workers (%d):", len(resp.Workers))
+		for _, w := range resp.Workers {
+			log.Printf("- %s (%s) | Status: %s | CPU: %.1f%% | RAM: %d MB | Last Seen: %s",
+				w.WorkerId, w.Hostname, w.Status, w.CpuUsage*100, w.RamUsageBytes/(1024*1024),
+				time.Unix(w.LastHeartbeatUnix, 0).Format("15:04:05"))
+		}
+
 	default:
 		log.Fatalf("Unknown command: %s", os.Args[1])
 	}

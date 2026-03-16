@@ -16,6 +16,8 @@ type Worker struct {
 	pb.WorkerInfo
 	LastHeartbeat time.Time
 	Status        string
+	CpuUsage      float32
+	RamUsageBytes int64
 }
 
 type KazeMaster struct {
@@ -55,10 +57,31 @@ func (m *KazeMaster) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*
 	if w, ok := m.workers[req.WorkerId]; ok {
 		w.LastHeartbeat = time.Now()
 		w.Status = "ONLINE"
+		w.CpuUsage = req.CpuUsage
+		w.RamUsageBytes = req.RamUsageBytes
 		return &pb.HeartbeatResponse{Ok: true}, nil
 	}
 
 	return &pb.HeartbeatResponse{Ok: false}, nil
+}
+
+func (m *KazeMaster) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest) (*pb.ListWorkersResponse, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	resp := &pb.ListWorkersResponse{}
+	for _, w := range m.workers {
+		resp.Workers = append(resp.Workers, &pb.WorkerStatus{
+			WorkerId:          w.WorkerId,
+			Hostname:          w.Hostname,
+			Status:            w.Status,
+			CpuUsage:          w.CpuUsage,
+			RamUsageBytes:     w.RamUsageBytes,
+			LastHeartbeatUnix: w.LastHeartbeat.Unix(),
+		})
+	}
+
+	return resp, nil
 }
 
 func (m *KazeMaster) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobResponse, error) {
