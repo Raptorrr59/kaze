@@ -42,16 +42,21 @@ func main() {
 	log.Printf("Registered: %s", resp.Message)
 
 	// 3. Start Heartbeat Loop
+	sendHeartbeat := func() {
+		_, err := client.Heartbeat(context.Background(), &pb.HeartbeatRequest{
+			WorkerId: workerID,
+			CpuUsage: 0.1, // Mock stats for now
+		})
+		if err != nil {
+			log.Printf("Heartbeat failed: %v", err)
+		}
+	}
+
+	sendHeartbeat() // Initial heartbeat
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		for range ticker.C {
-			_, err := client.Heartbeat(context.Background(), &pb.HeartbeatRequest{
-				WorkerId: workerID,
-				CpuUsage: 0.1, // Mock stats for now
-			})
-			if err != nil {
-				log.Printf("Heartbeat failed: %v", err)
-			}
+			sendHeartbeat()
 		}
 	}()
 
