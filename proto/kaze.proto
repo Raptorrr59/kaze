@@ -29,9 +29,16 @@ service KazeService {
 
     // Worker -> Master: Update job progress and status
     rpc UpdateJobStatus(UpdateJobStatusRequest) returns (UpdateJobStatusResponse);
+
+    // Client -> Master: Watch logs of a specific job in real-time
+    rpc WatchLogs(WatchLogsRequest) returns (stream LogFrame);
 }
 
 // --- MESSAGES ---
+
+message WatchLogsRequest {
+    string job_id = 1;
+}
 
 message GetJobStatusRequest {
     string job_id = 1;

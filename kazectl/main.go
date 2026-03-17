@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -101,6 +103,44 @@ func main() {
 		log.Printf("Status: %s", j.Status)
 		if j.Result != "" {
 			log.Printf("Result:\n%s", j.Result)
+		}
+
+	case "logs":
+		logsCmd := flag.NewFlagSet("logs", flag.ExitOnError)
+		follow := logsCmd.Bool("f", false, "Follow log output")
+		logsCmd.Parse(args)
+
+		if logsCmd.NArg() < 1 {
+			log.Fatalf("Usage: kazectl logs [-f] <job-id>")
+		}
+		jobID := logsCmd.Arg(0)
+
+		if *follow {
+			stream, err := client.WatchLogs(context.Background(), &pb.WatchLogsRequest{JobId: jobID})
+			if err != nil {
+				log.Fatalf("could not watch logs: %v", err)
+			}
+			log.Printf("Watching logs for job %s...", jobID)
+			for {
+				frame, err := stream.Recv()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Fatalf("error receiving log frame: %v", err)
+				}
+				fmt.Print(frame.Data)
+			}
+		} else {
+			j, err := client.GetJobStatus(context.Background(), &pb.GetJobStatusRequest{JobId: jobID})
+			if err != nil {
+				log.Fatalf("could not get job status: %v", err)
+			}
+			if j.Result != "" {
+				fmt.Print(j.Result)
+			} else {
+				log.Printf("Job %s has no logs yet (Status: %s)", jobID, j.Status)
+			}
 		}
 
 	case "list-workers":

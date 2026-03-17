@@ -27,6 +27,7 @@ const (
 	KazeService_GetJobStatus_FullMethodName    = "/kaze.KazeService/GetJobStatus"
 	KazeService_ListJobs_FullMethodName        = "/kaze.KazeService/ListJobs"
 	KazeService_UpdateJobStatus_FullMethodName = "/kaze.KazeService/UpdateJobStatus"
+	KazeService_WatchLogs_FullMethodName       = "/kaze.KazeService/WatchLogs"
 )
 
 // KazeServiceClient is the client API for KazeService service.
@@ -51,6 +52,8 @@ type KazeServiceClient interface {
 	ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
 	// Worker -> Master: Update job progress and status
 	UpdateJobStatus(ctx context.Context, in *UpdateJobStatusRequest, opts ...grpc.CallOption) (*UpdateJobStatusResponse, error)
+	// Client -> Master: Watch logs of a specific job in real-time
+	WatchLogs(ctx context.Context, in *WatchLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogFrame], error)
 }
 
 type kazeServiceClient struct {
@@ -144,6 +147,25 @@ func (c *kazeServiceClient) UpdateJobStatus(ctx context.Context, in *UpdateJobSt
 	return out, nil
 }
 
+func (c *kazeServiceClient) WatchLogs(ctx context.Context, in *WatchLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogFrame], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &KazeService_ServiceDesc.Streams[1], KazeService_WatchLogs_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchLogsRequest, LogFrame]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type KazeService_WatchLogsClient = grpc.ServerStreamingClient[LogFrame]
+
 // KazeServiceServer is the server API for KazeService service.
 // All implementations must embed UnimplementedKazeServiceServer
 // for forward compatibility.
@@ -166,6 +188,8 @@ type KazeServiceServer interface {
 	ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
 	// Worker -> Master: Update job progress and status
 	UpdateJobStatus(context.Context, *UpdateJobStatusRequest) (*UpdateJobStatusResponse, error)
+	// Client -> Master: Watch logs of a specific job in real-time
+	WatchLogs(*WatchLogsRequest, grpc.ServerStreamingServer[LogFrame]) error
 	mustEmbedUnimplementedKazeServiceServer()
 }
 
@@ -199,6 +223,9 @@ func (UnimplementedKazeServiceServer) ListJobs(context.Context, *ListJobsRequest
 }
 func (UnimplementedKazeServiceServer) UpdateJobStatus(context.Context, *UpdateJobStatusRequest) (*UpdateJobStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateJobStatus not implemented")
+}
+func (UnimplementedKazeServiceServer) WatchLogs(*WatchLogsRequest, grpc.ServerStreamingServer[LogFrame]) error {
+	return status.Error(codes.Unimplemented, "method WatchLogs not implemented")
 }
 func (UnimplementedKazeServiceServer) mustEmbedUnimplementedKazeServiceServer() {}
 func (UnimplementedKazeServiceServer) testEmbeddedByValue()                     {}
@@ -354,6 +381,17 @@ func _KazeService_UpdateJobStatus_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KazeService_WatchLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchLogsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(KazeServiceServer).WatchLogs(m, &grpc.GenericServerStream[WatchLogsRequest, LogFrame]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type KazeService_WatchLogsServer = grpc.ServerStreamingServer[LogFrame]
+
 // KazeService_ServiceDesc is the grpc.ServiceDesc for KazeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -396,6 +434,11 @@ var KazeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _KazeService_StreamLogs_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "WatchLogs",
+			Handler:       _KazeService_WatchLogs_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "proto/kaze.proto",

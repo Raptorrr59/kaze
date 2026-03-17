@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"google.golang.org/grpc"
@@ -19,6 +24,36 @@ import (
 
 	pb "projects/kaze/proto"
 )
+
+// --- METRICS ---
+
+var (
+	jobsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kaze_jobs_total",
+			Help: "Total number of jobs processed.",
+		},
+		[]string{"status"},
+	)
+	workersOnline = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kaze_workers_online_count",
+			Help: "Current number of online workers.",
+		},
+	)
+	queueDepth = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kaze_queue_depth",
+			Help: "Current number of jobs in SUBMITTED or QUEUED status.",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(jobsTotal)
+	prometheus.MustRegister(workersOnline)
+	prometheus.MustRegister(queueDepth)
+}
 
 // --- MODELS ---
 
@@ -56,7 +91,10 @@ type KazeMaster struct {
 	redis      *redis.Client
 	cron       *cron.Cron
 	mu         sync.RWMutex
-	workers    map[string]*Worker // In-memory cache for quick health checks
+	workers    map[string]*Worker
+	
+	// Log broadcasting: job_id -> map[subscriber_id]chan *pb.LogFrame
+	logSubscribers sync.Map 
 }
 
 func NewKazeMaster(db *gorm.DB, rdb *redis.Client) *KazeMaster {
@@ -67,7 +105,6 @@ func NewKazeMaster(db *gorm.DB, rdb *redis.Client) *KazeMaster {
 		workers: make(map[string]*Worker),
 	}
 	
-	// Load workers from DB into cache
 	var dbWorkers []Worker
 	db.Find(&dbWorkers)
 	for _, w := range dbWorkers {
@@ -77,6 +114,7 @@ func NewKazeMaster(db *gorm.DB, rdb *redis.Client) *KazeMaster {
 	m.cron.Start()
 	go m.workerHealthCheck()
 	go m.jobDispatcher()
+	go m.metricsUpdater()
 	return m
 }
 
@@ -111,9 +149,6 @@ func (m *KazeMaster) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*
 		w.CpuUsage = req.CpuUsage
 		w.RamUsageBytes = req.RamUsageBytes
 		
-		// Update DB periodically or on significant change? 
-		// For Phase 2, let's just update the cache and occasionally persist.
-		// For simplicity, update DB now.
 		m.db.Model(w).Updates(map[string]interface{}{
 			"last_heartbeat":  w.LastHeartbeat,
 			"status":          w.Status,
@@ -217,7 +252,6 @@ func (m *KazeMaster) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb
 }
 
 func (m *KazeMaster) UpdateJobStatus(ctx context.Context, req *pb.UpdateJobStatusRequest) (*pb.UpdateJobStatusResponse, error) {
-	// Sanitize result to remove null bytes that Postgres doesn't like in UTF8 strings
 	sanitizedResult := strings.ReplaceAll(req.Result, "\x00", "")
 
 	err := m.db.Model(&Job{}).Where("id = ?", req.JobId).Updates(map[string]interface{}{
@@ -225,24 +259,75 @@ func (m *KazeMaster) UpdateJobStatus(ctx context.Context, req *pb.UpdateJobStatu
 		"result": sanitizedResult,
 	}).Error
 
+	if err == nil {
+		if req.Status == "COMPLETED" || req.Status == "FAILED" {
+			jobsTotal.WithLabelValues(req.Status).Inc()
+		}
+	}
+
 	if err != nil {
 		return &pb.UpdateJobStatusResponse{Success: false}, err
 	}
 	return &pb.UpdateJobStatusResponse{Success: true}, nil
 }
 
+func (m *KazeMaster) StreamLogs(stream pb.KazeService_StreamLogsServer) error {
+	for {
+		frame, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+
+		// Broadcast to all watchers of this job_id
+		if subs, ok := m.logSubscribers.Load(frame.JobId); ok {
+			subMap := subs.(*sync.Map)
+			subMap.Range(func(key, value interface{}) bool {
+				ch := value.(chan *pb.LogFrame)
+				select {
+				case ch <- frame:
+				default:
+					// If channel is full, drop frame or handle backpressure
+				}
+				return true
+			})
+		}
+	}
+}
+
+func (m *KazeMaster) WatchLogs(req *pb.WatchLogsRequest, stream pb.KazeService_WatchLogsServer) error {
+	subID := uuid.New().String()
+	logChan := make(chan *pb.LogFrame, 100)
+
+	actualSubs, _ := m.logSubscribers.LoadOrStore(req.JobId, &sync.Map{})
+	subMap := actualSubs.(*sync.Map)
+	subMap.Store(subID, logChan)
+	
+	defer func() {
+		subMap.Delete(subID)
+		// Cleanup map if empty?
+	}()
+
+	for {
+		select {
+		case frame := <-logChan:
+			if err := stream.Send(frame); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			return stream.Context().Err()
+		}
+	}
+}
+
 // --- BACKGROUND LOGIC ---
 
 func (m *KazeMaster) handleCronTrigger(jobTemplate *Job) {
-	// Simple distributed lock to ensure only one master triggers the job
-	// Key: cron:<job_id>:<minute_timestamp>
 	timestamp := time.Now().Truncate(time.Minute).Unix()
 	lockKey := fmt.Sprintf("lock:cron:%s:%d", jobTemplate.ID, timestamp)
 	
 	ctx := context.Background()
 	ok, err := m.redis.SetNX(ctx, lockKey, "locked", 2*time.Minute).Result()
 	if err != nil || !ok {
-		// Failed to acquire lock, someone else triggered it
 		return
 	}
 
@@ -270,7 +355,6 @@ func (m *KazeMaster) workerHealthCheck() {
 					w.Status = "OFFLINE"
 					m.db.Model(w).Update("status", "OFFLINE")
 					
-					// Re-assign RUNNING jobs
 					m.db.Model(&Job{}).Where("worker_id = ? AND status = ?", id, "RUNNING").
 						Updates(map[string]interface{}{"status": "QUEUED", "worker_id": ""})
 				}
@@ -284,17 +368,15 @@ func (m *KazeMaster) jobDispatcher() {
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
 		var pendingJobs []Job
-		// Simple: find SUBMITTED/QUEUED jobs
 		m.db.Where("status IN ?", []string{"SUBMITTED", "QUEUED"}).Order("priority desc, created_at asc").Find(&pendingJobs)
 
 		for _, job := range pendingJobs {
-			// Find an ONLINE worker
 			m.mu.RLock()
 			var targetWorker *Worker
 			for _, w := range m.workers {
 				if w.Status == "ONLINE" {
 					targetWorker = w
-					break // Just pick the first for now (Phase 2)
+					break 
 				}
 			}
 			m.mu.RUnlock()
@@ -305,14 +387,32 @@ func (m *KazeMaster) jobDispatcher() {
 					"status":    "ASSIGNED",
 					"worker_id": targetWorker.ID,
 				})
-				// In a real system, we'd notify the worker here. 
-				// For Phase 2, let's assume workers long-poll or we add a stream.
 			}
 		}
 	}
 }
 
+func (m *KazeMaster) metricsUpdater() {
+	ticker := time.NewTicker(5 * time.Second)
+	for range ticker.C {
+		m.mu.RLock()
+		online := 0
+		for _, w := range m.workers {
+			if w.Status == "ONLINE" {
+				online++
+			}
+		}
+		m.mu.RUnlock()
+		workersOnline.Set(float64(online))
+
+		var count int64
+		m.db.Model(&Job{}).Where("status IN ?", []string{"SUBMITTED", "QUEUED"}).Count(&count)
+		queueDepth.Set(float64(count))
+	}
+}
+
 func main() {
+	// 1. Infrastructure (DB, Redis)
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "host=localhost user=kaze_user password=kaze_password dbname=kaze_db port=5432 sslmode=disable"
@@ -322,25 +422,44 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
-
-	// Auto-migrate models
 	db.AutoMigrate(&Job{}, &Worker{})
 
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr: redisAddr,
-	})
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
 
+	// 2. Metrics Server
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		log.Printf("Metrics available at :9090/metrics")
+		if err := http.ListenAndServe(":9090", nil); err != nil {
+			log.Printf("Metrics server failed: %v", err)
+		}
+	}()
+
+	// 3. gRPC Server
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterKazeServiceServer(s, NewKazeMaster(db, rdb))
+	master := NewKazeMaster(db, rdb)
+	pb.RegisterKazeServiceServer(s, master)
+
+	// 4. Graceful Shutdown
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		log.Println("Shutting down Kaze Master...")
+		
+		master.cron.Stop()
+		s.GracefulStop()
+		os.Exit(0)
+	}()
 
 	log.Printf("Kaze Master listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
