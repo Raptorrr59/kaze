@@ -45,22 +45,22 @@ Kaze is a distributed system designed to handle the orchestration of complex tas
 ## 3. Highly Detailed Objectives
 
 ### Phase 1: The Foundation (Week 1-2)
-*   [ ] **Protobuf Contract:** Define the `KazeService` including `RegisterWorker`, `SubmitJob`, `StreamLogs`, and `Heartbeat`.
-*   [ ] **Master Server:** Implement the gRPC server and a basic in-memory task queue.
-*   [ ] **Worker Client:** Implement the worker registration loop and a basic Shell Executor.
-*   [ ] **CLI (`kazectl`):** Create a basic CLI that can submit a "Hello World" task and list workers.
+*   [x] **Protobuf Contract:** Define the `KazeService` including `RegisterWorker`, `SubmitJob`, `StreamLogs`, and `Heartbeat`.
+*   [x] **Master Server:** Implement the gRPC server and a basic in-memory task queue.
+*   [x] **Worker Client:** Implement the worker registration loop and a basic Shell Executor.
+*   [x] **CLI (`kazectl`):** Create a basic CLI that can submit a "Hello World" task and list workers.
 
 ### Phase 2: Persistence & Reliability (Week 3-4)
-*   [ ] **PostgreSQL Integration:** Replace in-memory storage with a relational schema for persistence across restarts.
-*   [ ] **Cron Scheduler:** Implement a ticker-based scheduler that triggers jobs based on Cron expressions.
-*   [ ] **Fault Detection:** Implement the logic to mark workers as "Offline" after 3 missed heartbeats.
-*   [ ] **Docker Executor:** Implement the ability to pull a Docker image and run a task within a container using the Docker Engine API.
+*   [x] **PostgreSQL Integration:** Replace in-memory storage with a relational schema for persistence across restarts.
+*   [x] **Cron Scheduler:** Implement a ticker-based scheduler that triggers jobs based on Cron expressions.
+*   [x] **Fault Detection:** Implement the logic to mark workers as "Offline" after 3 missed heartbeats.
+*   [x] **Docker Executor:** Implement the ability to pull a Docker image and run a task within a container using the Docker Engine API.
 
 ### Phase 3: Advanced Features & Observability (Week 5-6)
-*   [ ] **Real-time Log Streaming:** Pipe logs from the worker's container/shell through gRPC to the Master, allowing `kazectl logs -f <id>`.
-*   [ ] **Distributed Locking:** Integrate Redis to ensure only one Master can process the schedule (preparing for HA).
-*   [ ] **Metrics:** Export Prometheus metrics for queue depth, worker health, and task failure rates.
-*   [ ] **Clean Shutdown:** Ensure workers finish current tasks (or checkpoint them) before exiting on `SIGTERM`.
+*   [x] **Real-time Log Streaming:** Pipe logs from the worker's container/shell through gRPC to the Master, allowing `kazectl logs -f <id>`.
+*   [x] **Distributed Locking:** Integrate Redis to ensure only one Master can process the schedule (preparing for HA).
+*   [x] **Metrics:** Export Prometheus metrics for queue depth, worker health, and task failure rates.
+*   [x] **Clean Shutdown:** Ensure workers finish current tasks (or checkpoint them) before exiting on `SIGTERM`.
 
 ---
 
