@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=kaze_user
+      - POSTGRES_PASSWORD=kaze_password
+      - POSTGRES_DB=kaze_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - kaze_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  kaze_postgres_data:

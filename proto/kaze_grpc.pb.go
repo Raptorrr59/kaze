@@ -19,11 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KazeService_RegisterWorker_FullMethodName = "/kaze.KazeService/RegisterWorker"
-	KazeService_Heartbeat_FullMethodName      = "/kaze.KazeService/Heartbeat"
-	KazeService_SubmitJob_FullMethodName      = "/kaze.KazeService/SubmitJob"
-	KazeService_StreamLogs_FullMethodName     = "/kaze.KazeService/StreamLogs"
-	KazeService_ListWorkers_FullMethodName    = "/kaze.KazeService/ListWorkers"
+	KazeService_RegisterWorker_FullMethodName  = "/kaze.KazeService/RegisterWorker"
+	KazeService_Heartbeat_FullMethodName       = "/kaze.KazeService/Heartbeat"
+	KazeService_SubmitJob_FullMethodName       = "/kaze.KazeService/SubmitJob"
+	KazeService_StreamLogs_FullMethodName      = "/kaze.KazeService/StreamLogs"
+	KazeService_ListWorkers_FullMethodName     = "/kaze.KazeService/ListWorkers"
+	KazeService_GetJobStatus_FullMethodName    = "/kaze.KazeService/GetJobStatus"
+	KazeService_ListJobs_FullMethodName        = "/kaze.KazeService/ListJobs"
+	KazeService_UpdateJobStatus_FullMethodName = "/kaze.KazeService/UpdateJobStatus"
 )
 
 // KazeServiceClient is the client API for KazeService service.
@@ -42,6 +45,12 @@ type KazeServiceClient interface {
 	StreamLogs(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[LogFrame, LogControl], error)
 	// Client -> Master: List registered workers
 	ListWorkers(ctx context.Context, in *ListWorkersRequest, opts ...grpc.CallOption) (*ListWorkersResponse, error)
+	// Client -> Master: Get status of a specific job
+	GetJobStatus(ctx context.Context, in *GetJobStatusRequest, opts ...grpc.CallOption) (*JobStatusResponse, error)
+	// Client -> Master: List all jobs
+	ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
+	// Worker -> Master: Update job progress and status
+	UpdateJobStatus(ctx context.Context, in *UpdateJobStatusRequest, opts ...grpc.CallOption) (*UpdateJobStatusResponse, error)
 }
 
 type kazeServiceClient struct {
@@ -105,6 +114,36 @@ func (c *kazeServiceClient) ListWorkers(ctx context.Context, in *ListWorkersRequ
 	return out, nil
 }
 
+func (c *kazeServiceClient) GetJobStatus(ctx context.Context, in *GetJobStatusRequest, opts ...grpc.CallOption) (*JobStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(JobStatusResponse)
+	err := c.cc.Invoke(ctx, KazeService_GetJobStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kazeServiceClient) ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListJobsResponse)
+	err := c.cc.Invoke(ctx, KazeService_ListJobs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kazeServiceClient) UpdateJobStatus(ctx context.Context, in *UpdateJobStatusRequest, opts ...grpc.CallOption) (*UpdateJobStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateJobStatusResponse)
+	err := c.cc.Invoke(ctx, KazeService_UpdateJobStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KazeServiceServer is the server API for KazeService service.
 // All implementations must embed UnimplementedKazeServiceServer
 // for forward compatibility.
@@ -121,6 +160,12 @@ type KazeServiceServer interface {
 	StreamLogs(grpc.BidiStreamingServer[LogFrame, LogControl]) error
 	// Client -> Master: List registered workers
 	ListWorkers(context.Context, *ListWorkersRequest) (*ListWorkersResponse, error)
+	// Client -> Master: Get status of a specific job
+	GetJobStatus(context.Context, *GetJobStatusRequest) (*JobStatusResponse, error)
+	// Client -> Master: List all jobs
+	ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
+	// Worker -> Master: Update job progress and status
+	UpdateJobStatus(context.Context, *UpdateJobStatusRequest) (*UpdateJobStatusResponse, error)
 	mustEmbedUnimplementedKazeServiceServer()
 }
 
@@ -145,6 +190,15 @@ func (UnimplementedKazeServiceServer) StreamLogs(grpc.BidiStreamingServer[LogFra
 }
 func (UnimplementedKazeServiceServer) ListWorkers(context.Context, *ListWorkersRequest) (*ListWorkersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWorkers not implemented")
+}
+func (UnimplementedKazeServiceServer) GetJobStatus(context.Context, *GetJobStatusRequest) (*JobStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetJobStatus not implemented")
+}
+func (UnimplementedKazeServiceServer) ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListJobs not implemented")
+}
+func (UnimplementedKazeServiceServer) UpdateJobStatus(context.Context, *UpdateJobStatusRequest) (*UpdateJobStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateJobStatus not implemented")
 }
 func (UnimplementedKazeServiceServer) mustEmbedUnimplementedKazeServiceServer() {}
 func (UnimplementedKazeServiceServer) testEmbeddedByValue()                     {}
@@ -246,6 +300,60 @@ func _KazeService_ListWorkers_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KazeService_GetJobStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetJobStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KazeServiceServer).GetJobStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KazeService_GetJobStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KazeServiceServer).GetJobStatus(ctx, req.(*GetJobStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KazeService_ListJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KazeServiceServer).ListJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KazeService_ListJobs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KazeServiceServer).ListJobs(ctx, req.(*ListJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KazeService_UpdateJobStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateJobStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KazeServiceServer).UpdateJobStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KazeService_UpdateJobStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KazeServiceServer).UpdateJobStatus(ctx, req.(*UpdateJobStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KazeService_ServiceDesc is the grpc.ServiceDesc for KazeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -268,6 +376,18 @@ var KazeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListWorkers",
 			Handler:    _KazeService_ListWorkers_Handler,
+		},
+		{
+			MethodName: "GetJobStatus",
+			Handler:    _KazeService_GetJobStatus_Handler,
+		},
+		{
+			MethodName: "ListJobs",
+			Handler:    _KazeService_ListJobs_Handler,
+		},
+		{
+			MethodName: "UpdateJobStatus",
+			Handler:    _KazeService_UpdateJobStatus_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

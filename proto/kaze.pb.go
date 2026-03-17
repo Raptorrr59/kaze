@@ -21,6 +21,326 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetJobStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetJobStatusRequest) Reset() {
+	*x = GetJobStatusRequest{}
+	mi := &file_proto_kaze_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetJobStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJobStatusRequest) ProtoMessage() {}
+
+func (x *GetJobStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kaze_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJobStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetJobStatusRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kaze_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *GetJobStatusRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+type ListJobsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListJobsRequest) Reset() {
+	*x = ListJobsRequest{}
+	mi := &file_proto_kaze_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListJobsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListJobsRequest) ProtoMessage() {}
+
+func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kaze_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListJobsRequest.ProtoReflect.Descriptor instead.
+func (*ListJobsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kaze_proto_rawDescGZIP(), []int{1}
+}
+
+type ListJobsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Jobs          []*JobStatusResponse   `protobuf:"bytes,1,rep,name=jobs,proto3" json:"jobs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListJobsResponse) Reset() {
+	*x = ListJobsResponse{}
+	mi := &file_proto_kaze_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListJobsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListJobsResponse) ProtoMessage() {}
+
+func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kaze_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListJobsResponse.ProtoReflect.Descriptor instead.
+func (*ListJobsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kaze_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListJobsResponse) GetJobs() []*JobStatusResponse {
+	if x != nil {
+		return x.Jobs
+	}
+	return nil
+}
+
+type UpdateJobStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Result        string                 `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateJobStatusRequest) Reset() {
+	*x = UpdateJobStatusRequest{}
+	mi := &file_proto_kaze_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateJobStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateJobStatusRequest) ProtoMessage() {}
+
+func (x *UpdateJobStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kaze_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateJobStatusRequest.ProtoReflect.Descriptor instead.
+func (*UpdateJobStatusRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kaze_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *UpdateJobStatusRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *UpdateJobStatusRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *UpdateJobStatusRequest) GetResult() string {
+	if x != nil {
+		return x.Result
+	}
+	return ""
+}
+
+type UpdateJobStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateJobStatusResponse) Reset() {
+	*x = UpdateJobStatusResponse{}
+	mi := &file_proto_kaze_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateJobStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateJobStatusResponse) ProtoMessage() {}
+
+func (x *UpdateJobStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kaze_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateJobStatusResponse.ProtoReflect.Descriptor instead.
+func (*UpdateJobStatusResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kaze_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *UpdateJobStatusResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type JobStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	RetryCount    int32                  `protobuf:"varint,5,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	CronSpec      string                 `protobuf:"bytes,6,opt,name=cron_spec,json=cronSpec,proto3" json:"cron_spec,omitempty"`
+	Image         string                 `protobuf:"bytes,7,opt,name=image,proto3" json:"image,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JobStatusResponse) Reset() {
+	*x = JobStatusResponse{}
+	mi := &file_proto_kaze_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JobStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JobStatusResponse) ProtoMessage() {}
+
+func (x *JobStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kaze_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JobStatusResponse.ProtoReflect.Descriptor instead.
+func (*JobStatusResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kaze_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *JobStatusResponse) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *JobStatusResponse) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *JobStatusResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *JobStatusResponse) GetResult() string {
+	if x != nil {
+		return x.Result
+	}
+	return ""
+}
+
+func (x *JobStatusResponse) GetRetryCount() int32 {
+	if x != nil {
+		return x.RetryCount
+	}
+	return 0
+}
+
+func (x *JobStatusResponse) GetCronSpec() string {
+	if x != nil {
+		return x.CronSpec
+	}
+	return ""
+}
+
+func (x *JobStatusResponse) GetImage() string {
+	if x != nil {
+		return x.Image
+	}
+	return ""
+}
+
 type ListWorkersRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -29,7 +349,7 @@ type ListWorkersRequest struct {
 
 func (x *ListWorkersRequest) Reset() {
 	*x = ListWorkersRequest{}
-	mi := &file_proto_kaze_proto_msgTypes[0]
+	mi := &file_proto_kaze_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -41,7 +361,7 @@ func (x *ListWorkersRequest) String() string {
 func (*ListWorkersRequest) ProtoMessage() {}
 
 func (x *ListWorkersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[0]
+	mi := &file_proto_kaze_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54,7 +374,7 @@ func (x *ListWorkersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkersRequest.ProtoReflect.Descriptor instead.
 func (*ListWorkersRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{0}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{6}
 }
 
 type ListWorkersResponse struct {
@@ -66,7 +386,7 @@ type ListWorkersResponse struct {
 
 func (x *ListWorkersResponse) Reset() {
 	*x = ListWorkersResponse{}
-	mi := &file_proto_kaze_proto_msgTypes[1]
+	mi := &file_proto_kaze_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -78,7 +398,7 @@ func (x *ListWorkersResponse) String() string {
 func (*ListWorkersResponse) ProtoMessage() {}
 
 func (x *ListWorkersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[1]
+	mi := &file_proto_kaze_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -91,7 +411,7 @@ func (x *ListWorkersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkersResponse.ProtoReflect.Descriptor instead.
 func (*ListWorkersResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{1}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListWorkersResponse) GetWorkers() []*WorkerStatus {
@@ -115,7 +435,7 @@ type WorkerStatus struct {
 
 func (x *WorkerStatus) Reset() {
 	*x = WorkerStatus{}
-	mi := &file_proto_kaze_proto_msgTypes[2]
+	mi := &file_proto_kaze_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -127,7 +447,7 @@ func (x *WorkerStatus) String() string {
 func (*WorkerStatus) ProtoMessage() {}
 
 func (x *WorkerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[2]
+	mi := &file_proto_kaze_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -140,7 +460,7 @@ func (x *WorkerStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerStatus.ProtoReflect.Descriptor instead.
 func (*WorkerStatus) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{2}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *WorkerStatus) GetWorkerId() string {
@@ -198,7 +518,7 @@ type WorkerInfo struct {
 
 func (x *WorkerInfo) Reset() {
 	*x = WorkerInfo{}
-	mi := &file_proto_kaze_proto_msgTypes[3]
+	mi := &file_proto_kaze_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +530,7 @@ func (x *WorkerInfo) String() string {
 func (*WorkerInfo) ProtoMessage() {}
 
 func (x *WorkerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[3]
+	mi := &file_proto_kaze_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +543,7 @@ func (x *WorkerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerInfo.ProtoReflect.Descriptor instead.
 func (*WorkerInfo) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{3}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WorkerInfo) GetWorkerId() string {
@@ -271,7 +591,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_proto_kaze_proto_msgTypes[4]
+	mi := &file_proto_kaze_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +603,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[4]
+	mi := &file_proto_kaze_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +616,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{4}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RegisterResponse) GetSuccess() bool {
@@ -324,7 +644,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_proto_kaze_proto_msgTypes[5]
+	mi := &file_proto_kaze_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -336,7 +656,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[5]
+	mi := &file_proto_kaze_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -349,7 +669,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{5}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *HeartbeatRequest) GetWorkerId() string {
@@ -382,7 +702,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_proto_kaze_proto_msgTypes[6]
+	mi := &file_proto_kaze_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +714,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[6]
+	mi := &file_proto_kaze_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +727,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{6}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *HeartbeatResponse) GetOk() bool {
@@ -422,13 +742,15 @@ type JobRequest struct {
 	Command       string                 `protobuf:"bytes,1,opt,name=command,proto3" json:"command,omitempty"`
 	Image         string                 `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"` // Optional for Docker driver
 	Priority      int32                  `protobuf:"varint,3,opt,name=priority,proto3" json:"priority,omitempty"`
+	CronSpec      string                 `protobuf:"bytes,4,opt,name=cron_spec,json=cronSpec,proto3" json:"cron_spec,omitempty"` // e.g. "*/5 * * * *"
+	RetryLimit    int32                  `protobuf:"varint,5,opt,name=retry_limit,json=retryLimit,proto3" json:"retry_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JobRequest) Reset() {
 	*x = JobRequest{}
-	mi := &file_proto_kaze_proto_msgTypes[7]
+	mi := &file_proto_kaze_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -440,7 +762,7 @@ func (x *JobRequest) String() string {
 func (*JobRequest) ProtoMessage() {}
 
 func (x *JobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[7]
+	mi := &file_proto_kaze_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,7 +775,7 @@ func (x *JobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobRequest.ProtoReflect.Descriptor instead.
 func (*JobRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{7}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *JobRequest) GetCommand() string {
@@ -477,6 +799,20 @@ func (x *JobRequest) GetPriority() int32 {
 	return 0
 }
 
+func (x *JobRequest) GetCronSpec() string {
+	if x != nil {
+		return x.CronSpec
+	}
+	return ""
+}
+
+func (x *JobRequest) GetRetryLimit() int32 {
+	if x != nil {
+		return x.RetryLimit
+	}
+	return 0
+}
+
 type JobResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
@@ -487,7 +823,7 @@ type JobResponse struct {
 
 func (x *JobResponse) Reset() {
 	*x = JobResponse{}
-	mi := &file_proto_kaze_proto_msgTypes[8]
+	mi := &file_proto_kaze_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -499,7 +835,7 @@ func (x *JobResponse) String() string {
 func (*JobResponse) ProtoMessage() {}
 
 func (x *JobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[8]
+	mi := &file_proto_kaze_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -512,7 +848,7 @@ func (x *JobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobResponse.ProtoReflect.Descriptor instead.
 func (*JobResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{8}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *JobResponse) GetJobId() string {
@@ -541,7 +877,7 @@ type LogFrame struct {
 
 func (x *LogFrame) Reset() {
 	*x = LogFrame{}
-	mi := &file_proto_kaze_proto_msgTypes[9]
+	mi := &file_proto_kaze_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +889,7 @@ func (x *LogFrame) String() string {
 func (*LogFrame) ProtoMessage() {}
 
 func (x *LogFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[9]
+	mi := &file_proto_kaze_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +902,7 @@ func (x *LogFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogFrame.ProtoReflect.Descriptor instead.
 func (*LogFrame) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{9}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LogFrame) GetJobId() string {
@@ -606,7 +942,7 @@ type LogControl struct {
 
 func (x *LogControl) Reset() {
 	*x = LogControl{}
-	mi := &file_proto_kaze_proto_msgTypes[10]
+	mi := &file_proto_kaze_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -618,7 +954,7 @@ func (x *LogControl) String() string {
 func (*LogControl) ProtoMessage() {}
 
 func (x *LogControl) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kaze_proto_msgTypes[10]
+	mi := &file_proto_kaze_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -631,7 +967,7 @@ func (x *LogControl) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogControl.ProtoReflect.Descriptor instead.
 func (*LogControl) Descriptor() ([]byte, []int) {
-	return file_proto_kaze_proto_rawDescGZIP(), []int{10}
+	return file_proto_kaze_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *LogControl) GetStop() bool {
@@ -645,7 +981,27 @@ var File_proto_kaze_proto protoreflect.FileDescriptor
 
 const file_proto_kaze_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/kaze.proto\x12\x04kaze\"\x14\n" +
+	"\x10proto/kaze.proto\x12\x04kaze\",\n" +
+	"\x13GetJobStatusRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\x11\n" +
+	"\x0fListJobsRequest\"?\n" +
+	"\x10ListJobsResponse\x12+\n" +
+	"\x04jobs\x18\x01 \x03(\v2\x17.kaze.JobStatusResponseR\x04jobs\"_\n" +
+	"\x16UpdateJobStatusRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\x06result\x18\x03 \x01(\tR\x06result\"3\n" +
+	"\x17UpdateJobStatusResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xc8\x01\n" +
+	"\x11JobStatusResponse\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x18\n" +
+	"\acommand\x18\x02 \x01(\tR\acommand\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n" +
+	"\x06result\x18\x04 \x01(\tR\x06result\x12\x1f\n" +
+	"\vretry_count\x18\x05 \x01(\x05R\n" +
+	"retryCount\x12\x1b\n" +
+	"\tcron_spec\x18\x06 \x01(\tR\bcronSpec\x12\x14\n" +
+	"\x05image\x18\a \x01(\tR\x05image\"\x14\n" +
 	"\x12ListWorkersRequest\"C\n" +
 	"\x13ListWorkersResponse\x12,\n" +
 	"\aworkers\x18\x01 \x03(\v2\x12.kaze.WorkerStatusR\aworkers\"\xd4\x01\n" +
@@ -674,12 +1030,15 @@ const file_proto_kaze_proto_rawDesc = "" +
 	"\tcpu_usage\x18\x02 \x01(\x02R\bcpuUsage\x12&\n" +
 	"\x0fram_usage_bytes\x18\x03 \x01(\x03R\rramUsageBytes\"#\n" +
 	"\x11HeartbeatResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\"X\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x96\x01\n" +
 	"\n" +
 	"JobRequest\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x12\x14\n" +
 	"\x05image\x18\x02 \x01(\tR\x05image\x12\x1a\n" +
-	"\bpriority\x18\x03 \x01(\x05R\bpriority\"<\n" +
+	"\bpriority\x18\x03 \x01(\x05R\bpriority\x12\x1b\n" +
+	"\tcron_spec\x18\x04 \x01(\tR\bcronSpec\x12\x1f\n" +
+	"\vretry_limit\x18\x05 \x01(\x05R\n" +
+	"retryLimit\"<\n" +
 	"\vJobResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"s\n" +
@@ -691,14 +1050,17 @@ const file_proto_kaze_proto_rawDesc = "" +
 	"streamType\" \n" +
 	"\n" +
 	"LogControl\x12\x12\n" +
-	"\x04stop\x18\x01 \x01(\bR\x04stop2\xb1\x02\n" +
+	"\x04stop\x18\x01 \x01(\bR\x04stop2\x80\x04\n" +
 	"\vKazeService\x12:\n" +
 	"\x0eRegisterWorker\x12\x10.kaze.WorkerInfo\x1a\x16.kaze.RegisterResponse\x12<\n" +
 	"\tHeartbeat\x12\x16.kaze.HeartbeatRequest\x1a\x17.kaze.HeartbeatResponse\x120\n" +
 	"\tSubmitJob\x12\x10.kaze.JobRequest\x1a\x11.kaze.JobResponse\x122\n" +
 	"\n" +
 	"StreamLogs\x12\x0e.kaze.LogFrame\x1a\x10.kaze.LogControl(\x010\x01\x12B\n" +
-	"\vListWorkers\x12\x18.kaze.ListWorkersRequest\x1a\x19.kaze.ListWorkersResponseB\x15Z\x13projects/kaze/protob\x06proto3"
+	"\vListWorkers\x12\x18.kaze.ListWorkersRequest\x1a\x19.kaze.ListWorkersResponse\x12B\n" +
+	"\fGetJobStatus\x12\x19.kaze.GetJobStatusRequest\x1a\x17.kaze.JobStatusResponse\x129\n" +
+	"\bListJobs\x12\x15.kaze.ListJobsRequest\x1a\x16.kaze.ListJobsResponse\x12N\n" +
+	"\x0fUpdateJobStatus\x12\x1c.kaze.UpdateJobStatusRequest\x1a\x1d.kaze.UpdateJobStatusResponseB\x15Z\x13projects/kaze/protob\x06proto3"
 
 var (
 	file_proto_kaze_proto_rawDescOnce sync.Once
@@ -712,39 +1074,52 @@ func file_proto_kaze_proto_rawDescGZIP() []byte {
 	return file_proto_kaze_proto_rawDescData
 }
 
-var file_proto_kaze_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_proto_kaze_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_proto_kaze_proto_goTypes = []any{
-	(*ListWorkersRequest)(nil),  // 0: kaze.ListWorkersRequest
-	(*ListWorkersResponse)(nil), // 1: kaze.ListWorkersResponse
-	(*WorkerStatus)(nil),        // 2: kaze.WorkerStatus
-	(*WorkerInfo)(nil),          // 3: kaze.WorkerInfo
-	(*RegisterResponse)(nil),    // 4: kaze.RegisterResponse
-	(*HeartbeatRequest)(nil),    // 5: kaze.HeartbeatRequest
-	(*HeartbeatResponse)(nil),   // 6: kaze.HeartbeatResponse
-	(*JobRequest)(nil),          // 7: kaze.JobRequest
-	(*JobResponse)(nil),         // 8: kaze.JobResponse
-	(*LogFrame)(nil),            // 9: kaze.LogFrame
-	(*LogControl)(nil),          // 10: kaze.LogControl
-	nil,                         // 11: kaze.WorkerInfo.TagsEntry
+	(*GetJobStatusRequest)(nil),     // 0: kaze.GetJobStatusRequest
+	(*ListJobsRequest)(nil),         // 1: kaze.ListJobsRequest
+	(*ListJobsResponse)(nil),        // 2: kaze.ListJobsResponse
+	(*UpdateJobStatusRequest)(nil),  // 3: kaze.UpdateJobStatusRequest
+	(*UpdateJobStatusResponse)(nil), // 4: kaze.UpdateJobStatusResponse
+	(*JobStatusResponse)(nil),       // 5: kaze.JobStatusResponse
+	(*ListWorkersRequest)(nil),      // 6: kaze.ListWorkersRequest
+	(*ListWorkersResponse)(nil),     // 7: kaze.ListWorkersResponse
+	(*WorkerStatus)(nil),            // 8: kaze.WorkerStatus
+	(*WorkerInfo)(nil),              // 9: kaze.WorkerInfo
+	(*RegisterResponse)(nil),        // 10: kaze.RegisterResponse
+	(*HeartbeatRequest)(nil),        // 11: kaze.HeartbeatRequest
+	(*HeartbeatResponse)(nil),       // 12: kaze.HeartbeatResponse
+	(*JobRequest)(nil),              // 13: kaze.JobRequest
+	(*JobResponse)(nil),             // 14: kaze.JobResponse
+	(*LogFrame)(nil),                // 15: kaze.LogFrame
+	(*LogControl)(nil),              // 16: kaze.LogControl
+	nil,                             // 17: kaze.WorkerInfo.TagsEntry
 }
 var file_proto_kaze_proto_depIdxs = []int32{
-	2,  // 0: kaze.ListWorkersResponse.workers:type_name -> kaze.WorkerStatus
-	11, // 1: kaze.WorkerInfo.tags:type_name -> kaze.WorkerInfo.TagsEntry
-	3,  // 2: kaze.KazeService.RegisterWorker:input_type -> kaze.WorkerInfo
-	5,  // 3: kaze.KazeService.Heartbeat:input_type -> kaze.HeartbeatRequest
-	7,  // 4: kaze.KazeService.SubmitJob:input_type -> kaze.JobRequest
-	9,  // 5: kaze.KazeService.StreamLogs:input_type -> kaze.LogFrame
-	0,  // 6: kaze.KazeService.ListWorkers:input_type -> kaze.ListWorkersRequest
-	4,  // 7: kaze.KazeService.RegisterWorker:output_type -> kaze.RegisterResponse
-	6,  // 8: kaze.KazeService.Heartbeat:output_type -> kaze.HeartbeatResponse
-	8,  // 9: kaze.KazeService.SubmitJob:output_type -> kaze.JobResponse
-	10, // 10: kaze.KazeService.StreamLogs:output_type -> kaze.LogControl
-	1,  // 11: kaze.KazeService.ListWorkers:output_type -> kaze.ListWorkersResponse
-	7,  // [7:12] is the sub-list for method output_type
-	2,  // [2:7] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	5,  // 0: kaze.ListJobsResponse.jobs:type_name -> kaze.JobStatusResponse
+	8,  // 1: kaze.ListWorkersResponse.workers:type_name -> kaze.WorkerStatus
+	17, // 2: kaze.WorkerInfo.tags:type_name -> kaze.WorkerInfo.TagsEntry
+	9,  // 3: kaze.KazeService.RegisterWorker:input_type -> kaze.WorkerInfo
+	11, // 4: kaze.KazeService.Heartbeat:input_type -> kaze.HeartbeatRequest
+	13, // 5: kaze.KazeService.SubmitJob:input_type -> kaze.JobRequest
+	15, // 6: kaze.KazeService.StreamLogs:input_type -> kaze.LogFrame
+	6,  // 7: kaze.KazeService.ListWorkers:input_type -> kaze.ListWorkersRequest
+	0,  // 8: kaze.KazeService.GetJobStatus:input_type -> kaze.GetJobStatusRequest
+	1,  // 9: kaze.KazeService.ListJobs:input_type -> kaze.ListJobsRequest
+	3,  // 10: kaze.KazeService.UpdateJobStatus:input_type -> kaze.UpdateJobStatusRequest
+	10, // 11: kaze.KazeService.RegisterWorker:output_type -> kaze.RegisterResponse
+	12, // 12: kaze.KazeService.Heartbeat:output_type -> kaze.HeartbeatResponse
+	14, // 13: kaze.KazeService.SubmitJob:output_type -> kaze.JobResponse
+	16, // 14: kaze.KazeService.StreamLogs:output_type -> kaze.LogControl
+	7,  // 15: kaze.KazeService.ListWorkers:output_type -> kaze.ListWorkersResponse
+	5,  // 16: kaze.KazeService.GetJobStatus:output_type -> kaze.JobStatusResponse
+	2,  // 17: kaze.KazeService.ListJobs:output_type -> kaze.ListJobsResponse
+	4,  // 18: kaze.KazeService.UpdateJobStatus:output_type -> kaze.UpdateJobStatusResponse
+	11, // [11:19] is the sub-list for method output_type
+	3,  // [3:11] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_kaze_proto_init() }
@@ -758,7 +1133,7 @@ func file_proto_kaze_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_kaze_proto_rawDesc), len(file_proto_kaze_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"time"
@@ -23,22 +24,84 @@ func main() {
 	defer conn.Close()
 	client := pb.NewKazeServiceClient(conn)
 
-	switch os.Args[1] {
+	command := os.Args[1]
+	args := os.Args[2:]
+
+	switch command {
 	case "submit":
-		if len(os.Args) < 3 {
-			log.Fatalf("Usage: kazectl submit <shell-command>")
+		submitCmd := flag.NewFlagSet("submit", flag.ExitOnError)
+		image := submitCmd.String("image", "", "Docker image to run")
+		cronSpec := submitCmd.String("cron", "", "Cron schedule (e.g. '*/5 * * * *')")
+		priority := submitCmd.Int("priority", 0, "Job priority")
+		retryLimit := submitCmd.Int("retries", 3, "Retry limit")
+		submitCmd.Parse(args)
+
+		if submitCmd.NArg() < 1 {
+			log.Fatalf("Usage: kazectl submit [--image <img>] [--cron <spec>] <command>")
 		}
-		cmd := os.Args[2]
+		cmdStr := submitCmd.Arg(0)
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
 		resp, err := client.SubmitJob(ctx, &pb.JobRequest{
-			Command: cmd,
+			Command:    cmdStr,
+			Image:      *image,
+			CronSpec:   *cronSpec,
+			Priority:   int32(*priority),
+			RetryLimit: int32(*retryLimit),
 		})
 		if err != nil {
 			log.Fatalf("could not submit job: %v", err)
 		}
 		log.Printf("Job submitted! ID: %s, Status: %s", resp.JobId, resp.Status)
+
+	case "list-jobs":
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		resp, err := client.ListJobs(ctx, &pb.ListJobsRequest{})
+		if err != nil {
+			log.Fatalf("could not list jobs: %v", err)
+		}
+
+		log.Printf("Jobs (%d):", len(resp.Jobs))
+		for _, j := range resp.Jobs {
+			info := ""
+			if j.CronSpec != "" {
+				info += " [CRON: " + j.CronSpec + "]"
+			}
+			if j.Image != "" {
+				info += " [IMAGE: " + j.Image + "]"
+			}
+			log.Printf("- %s | %s | Status: %s%s", j.JobId, j.Command, j.Status, info)
+		}
+
+	case "status":
+		if len(args) < 1 {
+			log.Fatalf("Usage: kazectl status <job-id>")
+		}
+		jobID := args[0]
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		j, err := client.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: jobID})
+		if err != nil {
+			log.Fatalf("could not get job status: %v", err)
+		}
+
+		log.Printf("Job: %s", j.JobId)
+		log.Printf("Command: %s", j.Command)
+		if j.Image != "" {
+			log.Printf("Image: %s", j.Image)
+		}
+		if j.CronSpec != "" {
+			log.Printf("Cron: %s", j.CronSpec)
+		}
+		log.Printf("Status: %s", j.Status)
+		if j.Result != "" {
+			log.Printf("Result:\n%s", j.Result)
+		}
 
 	case "list-workers":
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -57,6 +120,6 @@ func main() {
 		}
 
 	default:
-		log.Fatalf("Unknown command: %s", os.Args[1])
+		log.Fatalf("Unknown command: %s", command)
 	}
 }
