@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 	pb "projects/kaze/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -25,6 +28,39 @@ type Worker struct {
 	client     pb.KazeServiceClient
 	docker     *client.Client
 	logStream  pb.KazeService_StreamLogsClient
+}
+
+func getSystemCapacity() (int32, int64, error) {
+	cpuCores, err := cpu.Counts(true)
+	if err != nil || cpuCores <= 0 {
+		cpuCores = 4 // Fallback
+	}
+
+	vm, err := mem.VirtualMemory()
+	var ramBytes int64
+	if err != nil || vm.Total <= 0 {
+		ramBytes = 8 * 1024 * 1024 * 1024 // Fallback 8GB
+	} else {
+		ramBytes = int64(vm.Total)
+	}
+
+	return int32(cpuCores), ramBytes, nil
+}
+
+func parseWorkerTags() map[string]string {
+	tagsStr := os.Getenv("KAZE_WORKER_TAGS")
+	tags := make(map[string]string)
+	if tagsStr == "" {
+		return tags
+	}
+	parts := strings.Split(tagsStr, ",")
+	for _, part := range parts {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) == 2 {
+			tags[kv[0]] = kv[1]
+		}
+	}
+	return tags
 }
 
 func main() {
@@ -64,11 +100,16 @@ func main() {
 
 	// 4. Register with Master
 	log.Printf("Worker %s registering...", workerID)
+	
+	cpuCores, ramBytes, _ := getSystemCapacity()
+	tags := parseWorkerTags()
+
 	resp, err := w.client.RegisterWorker(context.Background(), &pb.WorkerInfo{
 		WorkerId: workerID,
 		Hostname: hostname,
-		CpuCount: 4,
-		RamBytes: 8192,
+		CpuCount: cpuCores,
+		RamBytes: ramBytes,
+		Tags:     tags,
 	})
 	if err != nil || !resp.Success {
 		log.Fatalf("failed to register: %v", err)
@@ -95,10 +136,26 @@ func main() {
 
 func (w *Worker) heartbeatLoop() {
 	ticker := time.NewTicker(5 * time.Second)
+	// Initialize CPU metric check
+	cpu.Percent(0, false)
+	
 	for range ticker.C {
-		_, err := w.client.Heartbeat(context.Background(), &pb.HeartbeatRequest{
-			WorkerId: w.id,
-			CpuUsage: 0.1,
+		cpuPercents, err := cpu.Percent(0, false)
+		var cpuUsage float32 = 0.1
+		if err == nil && len(cpuPercents) > 0 {
+			cpuUsage = float32(cpuPercents[0]) / 100.0
+		}
+
+		vm, err := mem.VirtualMemory()
+		var ramUsageBytes int64 = 0
+		if err == nil {
+			ramUsageBytes = int64(vm.Used)
+		}
+
+		_, err = w.client.Heartbeat(context.Background(), &pb.HeartbeatRequest{
+			WorkerId:      w.id,
+			CpuUsage:      cpuUsage,
+			RamUsageBytes: ramUsageBytes,
 		})
 		if err != nil {
 			log.Printf("Heartbeat failed: %v", err)

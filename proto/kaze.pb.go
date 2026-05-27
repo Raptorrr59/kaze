@@ -302,6 +302,9 @@ type JobStatusResponse struct {
 	RetryCount    int32                  `protobuf:"varint,5,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
 	CronSpec      string                 `protobuf:"bytes,6,opt,name=cron_spec,json=cronSpec,proto3" json:"cron_spec,omitempty"`
 	Image         string                 `protobuf:"bytes,7,opt,name=image,proto3" json:"image,omitempty"`
+	RequiredCpu   float32                `protobuf:"fixed32,8,opt,name=required_cpu,json=requiredCpu,proto3" json:"required_cpu,omitempty"`
+	RequiredRamMb int64                  `protobuf:"varint,9,opt,name=required_ram_mb,json=requiredRamMb,proto3" json:"required_ram_mb,omitempty"`
+	RequiredTags  map[string]string      `protobuf:"bytes,10,rep,name=required_tags,json=requiredTags,proto3" json:"required_tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -383,6 +386,27 @@ func (x *JobStatusResponse) GetImage() string {
 		return x.Image
 	}
 	return ""
+}
+
+func (x *JobStatusResponse) GetRequiredCpu() float32 {
+	if x != nil {
+		return x.RequiredCpu
+	}
+	return 0
+}
+
+func (x *JobStatusResponse) GetRequiredRamMb() int64 {
+	if x != nil {
+		return x.RequiredRamMb
+	}
+	return 0
+}
+
+func (x *JobStatusResponse) GetRequiredTags() map[string]string {
+	if x != nil {
+		return x.RequiredTags
+	}
+	return nil
 }
 
 type ListWorkersRequest struct {
@@ -473,6 +497,9 @@ type WorkerStatus struct {
 	CpuUsage          float32                `protobuf:"fixed32,4,opt,name=cpu_usage,json=cpuUsage,proto3" json:"cpu_usage,omitempty"`
 	RamUsageBytes     int64                  `protobuf:"varint,5,opt,name=ram_usage_bytes,json=ramUsageBytes,proto3" json:"ram_usage_bytes,omitempty"`
 	LastHeartbeatUnix int64                  `protobuf:"varint,6,opt,name=last_heartbeat_unix,json=lastHeartbeatUnix,proto3" json:"last_heartbeat_unix,omitempty"`
+	CpuCount          int32                  `protobuf:"varint,7,opt,name=cpu_count,json=cpuCount,proto3" json:"cpu_count,omitempty"`
+	RamBytes          int64                  `protobuf:"varint,8,opt,name=ram_bytes,json=ramBytes,proto3" json:"ram_bytes,omitempty"`
+	Tags              map[string]string      `protobuf:"bytes,9,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -547,6 +574,27 @@ func (x *WorkerStatus) GetLastHeartbeatUnix() int64 {
 		return x.LastHeartbeatUnix
 	}
 	return 0
+}
+
+func (x *WorkerStatus) GetCpuCount() int32 {
+	if x != nil {
+		return x.CpuCount
+	}
+	return 0
+}
+
+func (x *WorkerStatus) GetRamBytes() int64 {
+	if x != nil {
+		return x.RamBytes
+	}
+	return 0
+}
+
+func (x *WorkerStatus) GetTags() map[string]string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
 }
 
 type WorkerInfo struct {
@@ -788,6 +836,9 @@ type JobRequest struct {
 	Priority      int32                  `protobuf:"varint,3,opt,name=priority,proto3" json:"priority,omitempty"`
 	CronSpec      string                 `protobuf:"bytes,4,opt,name=cron_spec,json=cronSpec,proto3" json:"cron_spec,omitempty"` // e.g. "*/5 * * * *"
 	RetryLimit    int32                  `protobuf:"varint,5,opt,name=retry_limit,json=retryLimit,proto3" json:"retry_limit,omitempty"`
+	RequiredCpu   float32                `protobuf:"fixed32,6,opt,name=required_cpu,json=requiredCpu,proto3" json:"required_cpu,omitempty"`
+	RequiredRamMb int64                  `protobuf:"varint,7,opt,name=required_ram_mb,json=requiredRamMb,proto3" json:"required_ram_mb,omitempty"`
+	RequiredTags  map[string]string      `protobuf:"bytes,8,rep,name=required_tags,json=requiredTags,proto3" json:"required_tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -855,6 +906,27 @@ func (x *JobRequest) GetRetryLimit() int32 {
 		return x.RetryLimit
 	}
 	return 0
+}
+
+func (x *JobRequest) GetRequiredCpu() float32 {
+	if x != nil {
+		return x.RequiredCpu
+	}
+	return 0
+}
+
+func (x *JobRequest) GetRequiredRamMb() int64 {
+	if x != nil {
+		return x.RequiredRamMb
+	}
+	return 0
+}
+
+func (x *JobRequest) GetRequiredTags() map[string]string {
+	if x != nil {
+		return x.RequiredTags
+	}
+	return nil
 }
 
 type JobResponse struct {
@@ -1038,7 +1110,7 @@ const file_proto_kaze_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
 	"\x06result\x18\x03 \x01(\tR\x06result\"3\n" +
 	"\x17UpdateJobStatusResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xc8\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xa4\x03\n" +
 	"\x11JobStatusResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x16\n" +
@@ -1047,17 +1119,30 @@ const file_proto_kaze_proto_rawDesc = "" +
 	"\vretry_count\x18\x05 \x01(\x05R\n" +
 	"retryCount\x12\x1b\n" +
 	"\tcron_spec\x18\x06 \x01(\tR\bcronSpec\x12\x14\n" +
-	"\x05image\x18\a \x01(\tR\x05image\"\x14\n" +
+	"\x05image\x18\a \x01(\tR\x05image\x12!\n" +
+	"\frequired_cpu\x18\b \x01(\x02R\vrequiredCpu\x12&\n" +
+	"\x0frequired_ram_mb\x18\t \x01(\x03R\rrequiredRamMb\x12N\n" +
+	"\rrequired_tags\x18\n" +
+	" \x03(\v2).kaze.JobStatusResponse.RequiredTagsEntryR\frequiredTags\x1a?\n" +
+	"\x11RequiredTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x14\n" +
 	"\x12ListWorkersRequest\"C\n" +
 	"\x13ListWorkersResponse\x12,\n" +
-	"\aworkers\x18\x01 \x03(\v2\x12.kaze.WorkerStatusR\aworkers\"\xd4\x01\n" +
+	"\aworkers\x18\x01 \x03(\v2\x12.kaze.WorkerStatusR\aworkers\"\xf9\x02\n" +
 	"\fWorkerStatus\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x16\n" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1b\n" +
 	"\tcpu_usage\x18\x04 \x01(\x02R\bcpuUsage\x12&\n" +
 	"\x0fram_usage_bytes\x18\x05 \x01(\x03R\rramUsageBytes\x12.\n" +
-	"\x13last_heartbeat_unix\x18\x06 \x01(\x03R\x11lastHeartbeatUnix\"\xe8\x01\n" +
+	"\x13last_heartbeat_unix\x18\x06 \x01(\x03R\x11lastHeartbeatUnix\x12\x1b\n" +
+	"\tcpu_count\x18\a \x01(\x05R\bcpuCount\x12\x1b\n" +
+	"\tram_bytes\x18\b \x01(\x03R\bramBytes\x120\n" +
+	"\x04tags\x18\t \x03(\v2\x1c.kaze.WorkerStatus.TagsEntryR\x04tags\x1a7\n" +
+	"\tTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe8\x01\n" +
 	"\n" +
 	"WorkerInfo\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1a\n" +
@@ -1076,7 +1161,7 @@ const file_proto_kaze_proto_rawDesc = "" +
 	"\tcpu_usage\x18\x02 \x01(\x02R\bcpuUsage\x12&\n" +
 	"\x0fram_usage_bytes\x18\x03 \x01(\x03R\rramUsageBytes\"#\n" +
 	"\x11HeartbeatResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x96\x01\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xeb\x02\n" +
 	"\n" +
 	"JobRequest\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x12\x14\n" +
@@ -1084,7 +1169,13 @@ const file_proto_kaze_proto_rawDesc = "" +
 	"\bpriority\x18\x03 \x01(\x05R\bpriority\x12\x1b\n" +
 	"\tcron_spec\x18\x04 \x01(\tR\bcronSpec\x12\x1f\n" +
 	"\vretry_limit\x18\x05 \x01(\x05R\n" +
-	"retryLimit\"<\n" +
+	"retryLimit\x12!\n" +
+	"\frequired_cpu\x18\x06 \x01(\x02R\vrequiredCpu\x12&\n" +
+	"\x0frequired_ram_mb\x18\a \x01(\x03R\rrequiredRamMb\x12G\n" +
+	"\rrequired_tags\x18\b \x03(\v2\".kaze.JobRequest.RequiredTagsEntryR\frequiredTags\x1a?\n" +
+	"\x11RequiredTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"<\n" +
 	"\vJobResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"s\n" +
@@ -1121,7 +1212,7 @@ func file_proto_kaze_proto_rawDescGZIP() []byte {
 	return file_proto_kaze_proto_rawDescData
 }
 
-var file_proto_kaze_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_kaze_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_proto_kaze_proto_goTypes = []any{
 	(*WatchLogsRequest)(nil),        // 0: kaze.WatchLogsRequest
 	(*GetJobStatusRequest)(nil),     // 1: kaze.GetJobStatusRequest
@@ -1141,35 +1232,41 @@ var file_proto_kaze_proto_goTypes = []any{
 	(*JobResponse)(nil),             // 15: kaze.JobResponse
 	(*LogFrame)(nil),                // 16: kaze.LogFrame
 	(*LogControl)(nil),              // 17: kaze.LogControl
-	nil,                             // 18: kaze.WorkerInfo.TagsEntry
+	nil,                             // 18: kaze.JobStatusResponse.RequiredTagsEntry
+	nil,                             // 19: kaze.WorkerStatus.TagsEntry
+	nil,                             // 20: kaze.WorkerInfo.TagsEntry
+	nil,                             // 21: kaze.JobRequest.RequiredTagsEntry
 }
 var file_proto_kaze_proto_depIdxs = []int32{
 	6,  // 0: kaze.ListJobsResponse.jobs:type_name -> kaze.JobStatusResponse
-	9,  // 1: kaze.ListWorkersResponse.workers:type_name -> kaze.WorkerStatus
-	18, // 2: kaze.WorkerInfo.tags:type_name -> kaze.WorkerInfo.TagsEntry
-	10, // 3: kaze.KazeService.RegisterWorker:input_type -> kaze.WorkerInfo
-	12, // 4: kaze.KazeService.Heartbeat:input_type -> kaze.HeartbeatRequest
-	14, // 5: kaze.KazeService.SubmitJob:input_type -> kaze.JobRequest
-	16, // 6: kaze.KazeService.StreamLogs:input_type -> kaze.LogFrame
-	7,  // 7: kaze.KazeService.ListWorkers:input_type -> kaze.ListWorkersRequest
-	1,  // 8: kaze.KazeService.GetJobStatus:input_type -> kaze.GetJobStatusRequest
-	2,  // 9: kaze.KazeService.ListJobs:input_type -> kaze.ListJobsRequest
-	4,  // 10: kaze.KazeService.UpdateJobStatus:input_type -> kaze.UpdateJobStatusRequest
-	0,  // 11: kaze.KazeService.WatchLogs:input_type -> kaze.WatchLogsRequest
-	11, // 12: kaze.KazeService.RegisterWorker:output_type -> kaze.RegisterResponse
-	13, // 13: kaze.KazeService.Heartbeat:output_type -> kaze.HeartbeatResponse
-	15, // 14: kaze.KazeService.SubmitJob:output_type -> kaze.JobResponse
-	17, // 15: kaze.KazeService.StreamLogs:output_type -> kaze.LogControl
-	8,  // 16: kaze.KazeService.ListWorkers:output_type -> kaze.ListWorkersResponse
-	6,  // 17: kaze.KazeService.GetJobStatus:output_type -> kaze.JobStatusResponse
-	3,  // 18: kaze.KazeService.ListJobs:output_type -> kaze.ListJobsResponse
-	5,  // 19: kaze.KazeService.UpdateJobStatus:output_type -> kaze.UpdateJobStatusResponse
-	16, // 20: kaze.KazeService.WatchLogs:output_type -> kaze.LogFrame
-	12, // [12:21] is the sub-list for method output_type
-	3,  // [3:12] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	18, // 1: kaze.JobStatusResponse.required_tags:type_name -> kaze.JobStatusResponse.RequiredTagsEntry
+	9,  // 2: kaze.ListWorkersResponse.workers:type_name -> kaze.WorkerStatus
+	19, // 3: kaze.WorkerStatus.tags:type_name -> kaze.WorkerStatus.TagsEntry
+	20, // 4: kaze.WorkerInfo.tags:type_name -> kaze.WorkerInfo.TagsEntry
+	21, // 5: kaze.JobRequest.required_tags:type_name -> kaze.JobRequest.RequiredTagsEntry
+	10, // 6: kaze.KazeService.RegisterWorker:input_type -> kaze.WorkerInfo
+	12, // 7: kaze.KazeService.Heartbeat:input_type -> kaze.HeartbeatRequest
+	14, // 8: kaze.KazeService.SubmitJob:input_type -> kaze.JobRequest
+	16, // 9: kaze.KazeService.StreamLogs:input_type -> kaze.LogFrame
+	7,  // 10: kaze.KazeService.ListWorkers:input_type -> kaze.ListWorkersRequest
+	1,  // 11: kaze.KazeService.GetJobStatus:input_type -> kaze.GetJobStatusRequest
+	2,  // 12: kaze.KazeService.ListJobs:input_type -> kaze.ListJobsRequest
+	4,  // 13: kaze.KazeService.UpdateJobStatus:input_type -> kaze.UpdateJobStatusRequest
+	0,  // 14: kaze.KazeService.WatchLogs:input_type -> kaze.WatchLogsRequest
+	11, // 15: kaze.KazeService.RegisterWorker:output_type -> kaze.RegisterResponse
+	13, // 16: kaze.KazeService.Heartbeat:output_type -> kaze.HeartbeatResponse
+	15, // 17: kaze.KazeService.SubmitJob:output_type -> kaze.JobResponse
+	17, // 18: kaze.KazeService.StreamLogs:output_type -> kaze.LogControl
+	8,  // 19: kaze.KazeService.ListWorkers:output_type -> kaze.ListWorkersResponse
+	6,  // 20: kaze.KazeService.GetJobStatus:output_type -> kaze.JobStatusResponse
+	3,  // 21: kaze.KazeService.ListJobs:output_type -> kaze.ListJobsResponse
+	5,  // 22: kaze.KazeService.UpdateJobStatus:output_type -> kaze.UpdateJobStatusResponse
+	16, // 23: kaze.KazeService.WatchLogs:output_type -> kaze.LogFrame
+	15, // [15:24] is the sub-list for method output_type
+	6,  // [6:15] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_kaze_proto_init() }
@@ -1183,7 +1280,7 @@ func file_proto_kaze_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_kaze_proto_rawDesc), len(file_proto_kaze_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

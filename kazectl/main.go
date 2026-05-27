@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	pb "projects/kaze/proto"
@@ -36,22 +37,39 @@ func main() {
 		cronSpec := submitCmd.String("cron", "", "Cron schedule (e.g. '*/5 * * * *')")
 		priority := submitCmd.Int("priority", 0, "Job priority")
 		retryLimit := submitCmd.Int("retries", 3, "Retry limit")
+		cpu := submitCmd.Float64("cpu", 0.0, "Required CPU cores")
+		ram := submitCmd.Int64("ram", 0, "Required RAM in MB")
+		tagsStr := submitCmd.String("tags", "", "Required worker tags (comma-separated, e.g. 'gpu=true,env=prod')")
 		submitCmd.Parse(args)
 
 		if submitCmd.NArg() < 1 {
-			log.Fatalf("Usage: kazectl submit [--image <img>] [--cron <spec>] <command>")
+			log.Fatalf("Usage: kazectl submit [--image <img>] [--cron <spec>] [--cpu <cores>] [--ram <mb>] [--tags <tags>] <command>")
 		}
 		cmdStr := submitCmd.Arg(0)
+
+		requiredTags := make(map[string]string)
+		if *tagsStr != "" {
+			parts := strings.Split(*tagsStr, ",")
+			for _, part := range parts {
+				kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+				if len(kv) == 2 {
+					requiredTags[kv[0]] = kv[1]
+				}
+			}
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
 		resp, err := client.SubmitJob(ctx, &pb.JobRequest{
-			Command:    cmdStr,
-			Image:      *image,
-			CronSpec:   *cronSpec,
-			Priority:   int32(*priority),
-			RetryLimit: int32(*retryLimit),
+			Command:       cmdStr,
+			Image:         *image,
+			CronSpec:      *cronSpec,
+			Priority:      int32(*priority),
+			RetryLimit:    int32(*retryLimit),
+			RequiredCpu:   float32(*cpu),
+			RequiredRamMb: *ram,
+			RequiredTags:  requiredTags,
 		})
 		if err != nil {
 			log.Fatalf("could not submit job: %v", err)
@@ -75,6 +93,12 @@ func main() {
 			}
 			if j.Image != "" {
 				info += " [IMAGE: " + j.Image + "]"
+			}
+			if j.RequiredCpu > 0 || j.RequiredRamMb > 0 {
+				info += fmt.Sprintf(" [Req: CPU=%.1f, RAM=%dMB]", j.RequiredCpu, j.RequiredRamMb)
+			}
+			if len(j.RequiredTags) > 0 {
+				info += fmt.Sprintf(" [Tags: %v]", j.RequiredTags)
 			}
 			log.Printf("- %s | %s | Status: %s%s", j.JobId, j.Command, j.Status, info)
 		}
@@ -101,6 +125,13 @@ func main() {
 			log.Printf("Cron: %s", j.CronSpec)
 		}
 		log.Printf("Status: %s", j.Status)
+		if j.RequiredCpu > 0 || j.RequiredRamMb > 0 {
+			log.Printf("Required CPU: %.1f cores", j.RequiredCpu)
+			log.Printf("Required RAM: %d MB", j.RequiredRamMb)
+		}
+		if len(j.RequiredTags) > 0 {
+			log.Printf("Required Tags: %v", j.RequiredTags)
+		}
 		if j.Result != "" {
 			log.Printf("Result:\n%s", j.Result)
 		}
@@ -154,11 +185,15 @@ func main() {
 
 		log.Printf("Registered Workers (%d):", len(resp.Workers))
 		for _, w := range resp.Workers {
-			log.Printf("- %s (%s) | Status: %s | CPU: %.1f%% | RAM: %d MB | Last Seen: %s",
-				w.WorkerId, w.Hostname, w.Status, w.CpuUsage*100, w.RamUsageBytes/(1024*1024),
-				time.Unix(w.LastHeartbeatUnix, 0).Format("15:04:05"))
+			tagsInfo := ""
+			if len(w.Tags) > 0 {
+				tagsInfo = fmt.Sprintf(" | Tags: %v", w.Tags)
+			}
+			log.Printf("- %s (%s) | Status: %s | CPU: %.1f%% / %d Cores | RAM: %d / %d MB | Last Seen: %s%s",
+				w.WorkerId, w.Hostname, w.Status, w.CpuUsage*100, w.CpuCount,
+				w.RamUsageBytes/(1024*1024), w.RamBytes/(1024*1024),
+				time.Unix(w.LastHeartbeatUnix, 0).Format("15:04:05"), tagsInfo)
 		}
-
 	default:
 		log.Fatalf("Unknown command: %s", command)
 	}

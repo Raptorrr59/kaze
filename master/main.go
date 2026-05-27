@@ -58,18 +58,21 @@ func init() {
 // --- MODELS ---
 
 type Job struct {
-	ID         string `gorm:"primaryKey"`
-	Command    string
-	Image      string
-	Priority   int32
-	Status     string
-	Result     string
-	RetryLimit int32
-	RetryCount int32
-	CronSpec   string
-	WorkerID   string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID            string `gorm:"primaryKey"`
+	Command       string
+	Image         string
+	Priority      int32
+	Status        string
+	Result        string
+	RetryLimit    int32
+	RetryCount    int32
+	CronSpec      string
+	WorkerID      string
+	RequiredCpu   float32
+	RequiredRamMb int64
+	RequiredTags  map[string]string `gorm:"serializer:json"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type Worker struct {
@@ -78,6 +81,9 @@ type Worker struct {
 	Status        string
 	CpuUsage      float32
 	RamUsageBytes int64
+	CpuCount      int32
+	RamBytes      int64
+	Tags          map[string]string `gorm:"serializer:json"`
 	LastHeartbeat time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -122,13 +128,17 @@ func (m *KazeMaster) RegisterWorker(ctx context.Context, info *pb.WorkerInfo) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	log.Printf("Registering worker: %s (%s)", info.WorkerId, info.Hostname)
+	log.Printf("Registering worker: %s (%s) with CPU: %d cores, RAM: %d MB, Tags: %v",
+		info.WorkerId, info.Hostname, info.CpuCount, info.RamBytes/(1024*1024), info.Tags)
 	
 	worker := &Worker{
 		ID:            info.WorkerId,
 		Hostname:      info.Hostname,
 		Status:        "ONLINE",
 		LastHeartbeat: time.Now(),
+		CpuCount:      info.CpuCount,
+		RamBytes:      info.RamBytes,
+		Tags:          info.Tags,
 	}
 
 	if err := m.db.Save(worker).Error; err != nil {
@@ -175,6 +185,9 @@ func (m *KazeMaster) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest
 			CpuUsage:          w.CpuUsage,
 			RamUsageBytes:     w.RamUsageBytes,
 			LastHeartbeatUnix: w.LastHeartbeat.Unix(),
+			CpuCount:          w.CpuCount,
+			RamBytes:          w.RamBytes,
+			Tags:              w.Tags,
 		})
 	}
 
@@ -183,16 +196,20 @@ func (m *KazeMaster) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest
 
 func (m *KazeMaster) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobResponse, error) {
 	jobID := uuid.New().String()
-	log.Printf("Received job: %s (ID: %s)", req.Command, jobID)
+	log.Printf("Received job: %s (ID: %s, CPU req: %.1f, RAM req: %d MB, Tags: %v)",
+		req.Command, jobID, req.RequiredCpu, req.RequiredRamMb, req.RequiredTags)
 	
 	job := &Job{
-		ID:         jobID,
-		Command:    req.Command,
-		Image:      req.Image,
-		Priority:   req.Priority,
-		Status:     "SUBMITTED",
-		CronSpec:   req.CronSpec,
-		RetryLimit: req.RetryLimit,
+		ID:            jobID,
+		Command:       req.Command,
+		Image:         req.Image,
+		Priority:      req.Priority,
+		Status:        "SUBMITTED",
+		CronSpec:      req.CronSpec,
+		RetryLimit:    req.RetryLimit,
+		RequiredCpu:   req.RequiredCpu,
+		RequiredRamMb: req.RequiredRamMb,
+		RequiredTags:  req.RequiredTags,
 	}
 
 	if err := m.db.Create(job).Error; err != nil {
@@ -222,13 +239,16 @@ func (m *KazeMaster) GetJobStatus(ctx context.Context, req *pb.GetJobStatusReque
 	}
 
 	return &pb.JobStatusResponse{
-		JobId:      job.ID,
-		Command:    job.Command,
-		Status:     job.Status,
-		Result:     job.Result,
-		RetryCount: job.RetryCount,
-		CronSpec:   job.CronSpec,
-		Image:      job.Image,
+		JobId:         job.ID,
+		Command:       job.Command,
+		Status:        job.Status,
+		Result:        job.Result,
+		RetryCount:    job.RetryCount,
+		CronSpec:      job.CronSpec,
+		Image:         job.Image,
+		RequiredCpu:   job.RequiredCpu,
+		RequiredRamMb: job.RequiredRamMb,
+		RequiredTags:  job.RequiredTags,
 	}, nil
 }
 
@@ -239,13 +259,16 @@ func (m *KazeMaster) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb
 	resp := &pb.ListJobsResponse{}
 	for _, job := range jobs {
 		resp.Jobs = append(resp.Jobs, &pb.JobStatusResponse{
-			JobId:      job.ID,
-			Command:    job.Command,
-			Status:     job.Status,
-			Result:     job.Result,
-			RetryCount: job.RetryCount,
-			CronSpec:   job.CronSpec,
-			Image:      job.Image,
+			JobId:         job.ID,
+			Command:       job.Command,
+			Status:        job.Status,
+			Result:        job.Result,
+			RetryCount:    job.RetryCount,
+			CronSpec:      job.CronSpec,
+			Image:         job.Image,
+			RequiredCpu:   job.RequiredCpu,
+			RequiredRamMb: job.RequiredRamMb,
+			RequiredTags:  job.RequiredTags,
 		})
 	}
 	return resp, nil
@@ -367,27 +390,107 @@ func (m *KazeMaster) workerHealthCheck() {
 func (m *KazeMaster) jobDispatcher() {
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
-		var pendingJobs []Job
-		m.db.Where("status IN ?", []string{"SUBMITTED", "QUEUED"}).Order("priority desc, created_at asc").Find(&pendingJobs)
+		m.dispatchJobsOnce()
+	}
+}
 
-		for _, job := range pendingJobs {
-			m.mu.RLock()
-			var targetWorker *Worker
-			for _, w := range m.workers {
-				if w.Status == "ONLINE" {
-					targetWorker = w
-					break 
+func (m *KazeMaster) dispatchJobsOnce() {
+	var pendingJobs []Job
+	if err := m.db.Where("status IN ?", []string{"SUBMITTED", "QUEUED"}).Order("priority desc, created_at asc").Find(&pendingJobs).Error; err != nil {
+		return
+	}
+
+	if len(pendingJobs) == 0 {
+		return
+	}
+
+	// Fetch currently running/assigned jobs to compute resource allocation
+	var activeJobs []Job
+	if err := m.db.Where("status IN ?", []string{"ASSIGNED", "RUNNING"}).Find(&activeJobs).Error; err != nil {
+		log.Printf("Dispatcher: failed to fetch active jobs: %v", err)
+		return
+	}
+
+	// Calculate allocations per worker
+	allocatedCpu := make(map[string]float32)
+	allocatedRam := make(map[string]int64)
+	for _, aj := range activeJobs {
+		if aj.WorkerID != "" {
+			allocatedCpu[aj.WorkerID] += aj.RequiredCpu
+			allocatedRam[aj.WorkerID] += aj.RequiredRamMb * 1024 * 1024 // convert MB to bytes
+		}
+	}
+
+	for _, job := range pendingJobs {
+		m.mu.RLock()
+		var eligibleWorkers []*Worker
+
+		for _, w := range m.workers {
+			if w.Status != "ONLINE" {
+				continue
+			}
+
+			// Check CPU capacity
+			availCpu := float32(w.CpuCount) - allocatedCpu[w.ID]
+			if availCpu < job.RequiredCpu {
+				continue
+			}
+
+			// Check RAM capacity
+			availRam := w.RamBytes - allocatedRam[w.ID]
+			reqRamBytes := job.RequiredRamMb * 1024 * 1024
+			if availRam < reqRamBytes {
+				continue
+			}
+
+			// Check Tag matching
+			tagsMatch := true
+			for k, v := range job.RequiredTags {
+				wv, ok := w.Tags[k]
+				if !ok || wv != v {
+					tagsMatch = false
+					break
 				}
 			}
-			m.mu.RUnlock()
-
-			if targetWorker != nil {
-				log.Printf("Assigning job %s to worker %s", job.ID, targetWorker.ID)
-				m.db.Model(&job).Updates(map[string]interface{}{
-					"status":    "ASSIGNED",
-					"worker_id": targetWorker.ID,
-				})
+			if !tagsMatch {
+				continue
 			}
+
+			eligibleWorkers = append(eligibleWorkers, w)
+		}
+		m.mu.RUnlock()
+
+		// Select the Best-Fit worker: smallest total capacity that still fits
+		var targetWorker *Worker
+		for _, w := range eligibleWorkers {
+			if targetWorker == nil {
+				targetWorker = w
+			} else {
+				// Compare total capacity: CPU count first, then RAM bytes
+				if w.CpuCount < targetWorker.CpuCount {
+					targetWorker = w
+				} else if w.CpuCount == targetWorker.CpuCount && w.RamBytes < targetWorker.RamBytes {
+					targetWorker = w
+				}
+			}
+		}
+
+		if targetWorker != nil {
+			log.Printf("Assigning job %s (CPU req: %.1f, RAM req: %dMB) to worker %s (Total CPU: %d, Total RAM: %dMB)",
+				job.ID, job.RequiredCpu, job.RequiredRamMb, targetWorker.ID, targetWorker.CpuCount, targetWorker.RamBytes/(1024*1024))
+			
+			err := m.db.Model(&job).Updates(map[string]interface{}{
+				"status":    "ASSIGNED",
+				"worker_id": targetWorker.ID,
+			}).Error
+			if err != nil {
+				log.Printf("Dispatcher: failed to assign job %s: %v", job.ID, err)
+				continue
+			}
+
+			// Update dynamically allocated map
+			allocatedCpu[targetWorker.ID] += job.RequiredCpu
+			allocatedRam[targetWorker.ID] += job.RequiredRamMb * 1024 * 1024
 		}
 	}
 }

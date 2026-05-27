@@ -68,6 +68,9 @@ message JobStatusResponse {
     int32 retry_count = 5;
     string cron_spec = 6;
     string image = 7;
+    float required_cpu = 8;
+    int64 required_ram_mb = 9;
+    map<string, string> required_tags = 10;
 }
 
 message ListWorkersRequest {}
@@ -83,6 +86,9 @@ message WorkerStatus {
     float cpu_usage = 4;
     int64 ram_usage_bytes = 5;
     int64 last_heartbeat_unix = 6;
+    int32 cpu_count = 7;
+    int64 ram_bytes = 8;
+    map<string, string> tags = 9;
 }
 
 message WorkerInfo {
@@ -114,6 +120,9 @@ message JobRequest {
     int32 priority = 3;
     string cron_spec = 4; // e.g. "*/5 * * * *"
     int32 retry_limit = 5;
+    float required_cpu = 6;
+    int64 required_ram_mb = 7;
+    map<string, string> required_tags = 8;
 }
 
 message JobResponse {
