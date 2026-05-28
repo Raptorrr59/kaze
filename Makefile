@@ -1,4 +1,4 @@
-.PHONY: proto build master worker kazectl clean
+.PHONY: proto build master worker kazectl certs clean
 
 # Variables
 PROTO_DIR = proto
@@ -40,5 +40,10 @@ run-master: build
 run-worker: build
 	./$(BIN_DIR)/kaze-worker
 
+certs:
+	@echo "Generating certificates..."
+	./scripts/gen-certs.sh
+
 clean:
 	rm -rf $(BIN_DIR)
+	rm -rf certs

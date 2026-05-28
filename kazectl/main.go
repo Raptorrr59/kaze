@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"io"
@@ -12,15 +14,58 @@ import (
 
 	pb "projects/kaze/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
+
+func getClientTLSCredentials() (credentials.TransportCredentials, error) {
+	caCertFile := os.Getenv("KAZE_CA_CERT")
+	if caCertFile == "" {
+		caCertFile = "certs/ca.pem"
+	}
+	certFile := os.Getenv("KAZE_CLIENT_CERT")
+	if certFile == "" {
+		certFile = "certs/client.pem"
+	}
+	keyFile := os.Getenv("KAZE_CLIENT_KEY")
+	if keyFile == "" {
+		keyFile = "certs/client-key.pem"
+	}
+
+	clientCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client key pair: %v", err)
+	}
+
+	caCert, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate: %v", err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to append CA certificate to pool")
+	}
+
+	config := &tls.Config{
+		Certificates: []tls.Certificate{clientCert},
+		RootCAs:      certPool,
+		ServerName:   "localhost",
+	}
+
+	return credentials.NewTLS(config), nil
+}
 
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatalf("Usage: kazectl <command> [args]")
 	}
 
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	tlsCreds, err := getClientTLSCredentials()
+	if err != nil {
+		log.Fatalf("failed to load TLS credentials: %v", err)
+	}
+
+	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(tlsCreds))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

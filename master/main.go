@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"net"
@@ -18,6 +20,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"strings"
@@ -514,6 +520,118 @@ func (m *KazeMaster) metricsUpdater() {
 	}
 }
 
+// --- TLS & AUTHENTICATION ---
+
+func getMasterTLSCredentials() (credentials.TransportCredentials, error) {
+	caCertFile := os.Getenv("KAZE_CA_CERT")
+	if caCertFile == "" {
+		caCertFile = "certs/ca.pem"
+	}
+	certFile := os.Getenv("KAZE_MASTER_CERT")
+	if certFile == "" {
+		certFile = "certs/master.pem"
+	}
+	keyFile := os.Getenv("KAZE_MASTER_KEY")
+	if keyFile == "" {
+		keyFile = "certs/master-key.pem"
+	}
+
+	serverCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load master key pair: %v", err)
+	}
+
+	caCert, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate: %v", err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to append CA certificate to pool")
+	}
+
+	config := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    certPool,
+		MinVersion:   tls.VersionTLS13,
+	}
+
+	return credentials.NewTLS(config), nil
+}
+
+func authorizeClient(ctx context.Context, fullMethod string) (context.Context, error) {
+	pr, ok := peer.FromContext(ctx)
+	if !ok {
+		return ctx, status.Error(codes.Unauthenticated, "no peer info found")
+	}
+
+	tlsInfo, ok := pr.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return ctx, status.Error(codes.Unauthenticated, "no TLS info found")
+	}
+
+	if len(tlsInfo.State.VerifiedChains) == 0 || len(tlsInfo.State.VerifiedChains[0]) == 0 {
+		return ctx, status.Error(codes.Unauthenticated, "no verified client certificate chain")
+	}
+
+	clientCert := tlsInfo.State.VerifiedChains[0][0]
+	cn := clientCert.Subject.CommonName
+
+	workerMethods := map[string]bool{
+		"/kaze.KazeService/RegisterWorker":  true,
+		"/kaze.KazeService/Heartbeat":       true,
+		"/kaze.KazeService/UpdateJobStatus": true,
+		"/kaze.KazeService/StreamLogs":      true,
+	}
+
+	clientMethods := map[string]bool{
+		"/kaze.KazeService/SubmitJob":   true,
+		"/kaze.KazeService/ListWorkers": true,
+		"/kaze.KazeService/WatchLogs":   true,
+	}
+
+	sharedMethods := map[string]bool{
+		"/kaze.KazeService/ListJobs":     true,
+		"/kaze.KazeService/GetJobStatus": true,
+	}
+
+	if workerMethods[fullMethod] {
+		if cn != "worker" {
+			return ctx, status.Errorf(codes.PermissionDenied, "role 'worker' required, client has CN '%s'", cn)
+		}
+	} else if clientMethods[fullMethod] {
+		if cn != "client" {
+			return ctx, status.Errorf(codes.PermissionDenied, "role 'client' required, client has CN '%s'", cn)
+		}
+	} else if sharedMethods[fullMethod] {
+		if cn != "worker" && cn != "client" {
+			return ctx, status.Errorf(codes.PermissionDenied, "role 'worker' or 'client' required, client has CN '%s'", cn)
+		}
+	} else {
+		return ctx, status.Errorf(codes.PermissionDenied, "unknown method '%s'", fullMethod)
+	}
+
+	return ctx, nil
+}
+
+func unaryAuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	newCtx, err := authorizeClient(ctx, info.FullMethod)
+	if err != nil {
+		return nil, err
+	}
+	return handler(newCtx, req)
+}
+
+func streamAuthInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	_, err := authorizeClient(ss.Context(), info.FullMethod)
+	if err != nil {
+		return err
+	}
+	return handler(srv, ss)
+}
+
 func main() {
 	// 1. Infrastructure (DB, Redis)
 	dsn := os.Getenv("DATABASE_URL")
@@ -543,12 +661,21 @@ func main() {
 	}()
 
 	// 3. gRPC Server
+	tlsCreds, err := getMasterTLSCredentials()
+	if err != nil {
+		log.Fatalf("failed to load TLS credentials: %v", err)
+	}
+
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.Creds(tlsCreds),
+		grpc.UnaryInterceptor(unaryAuthInterceptor),
+		grpc.StreamInterceptor(streamAuthInterceptor),
+	)
 	master := NewKazeMaster(db, rdb)
 	pb.RegisterKazeServiceServer(s, master)
 

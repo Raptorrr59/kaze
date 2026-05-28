@@ -3,6 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -20,7 +23,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	pb "projects/kaze/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
 
 type Worker struct {
@@ -63,6 +66,44 @@ func parseWorkerTags() map[string]string {
 	return tags
 }
 
+func getWorkerTLSCredentials() (credentials.TransportCredentials, error) {
+	caCertFile := os.Getenv("KAZE_CA_CERT")
+	if caCertFile == "" {
+		caCertFile = "certs/ca.pem"
+	}
+	certFile := os.Getenv("KAZE_WORKER_CERT")
+	if certFile == "" {
+		certFile = "certs/worker.pem"
+	}
+	keyFile := os.Getenv("KAZE_WORKER_KEY")
+	if keyFile == "" {
+		keyFile = "certs/worker-key.pem"
+	}
+
+	clientCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load worker key pair: %v", err)
+	}
+
+	caCert, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate: %v", err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to append CA certificate to pool")
+	}
+
+	config := &tls.Config{
+		Certificates: []tls.Certificate{clientCert},
+		RootCAs:      certPool,
+		ServerName:   "localhost",
+	}
+
+	return credentials.NewTLS(config), nil
+}
+
 func main() {
 	workerID := os.Getenv("WORKER_ID")
 	if workerID == "" {
@@ -72,7 +113,12 @@ func main() {
 	hostname, _ := os.Hostname()
 
 	// 1. Connect to Master
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	tlsCreds, err := getWorkerTLSCredentials()
+	if err != nil {
+		log.Fatalf("failed to load TLS credentials: %v", err)
+	}
+
+	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(tlsCreds))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -248,10 +294,20 @@ func (w *Worker) executeShell(jobID, cmdStr string) (string, error) {
 		}
 	}
 
-	go streamToLogs(stdout, "stdout")
-	go streamToLogs(stderr, "stderr")
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		streamToLogs(stdout, "stdout")
+		wg.Done()
+	}()
+	go func() {
+		streamToLogs(stderr, "stderr")
+		wg.Done()
+	}()
 
 	err := cmd.Wait()
+	wg.Wait()
 	return string(fullOutput), err
 }
 
