@@ -53,12 +53,19 @@ var (
 			Help: "Current number of jobs in SUBMITTED or QUEUED status.",
 		},
 	)
+	masterIsLeader = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kaze_master_is_leader",
+			Help: "Indicates if this master instance is currently the cluster leader (1) or standby (0).",
+		},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(jobsTotal)
 	prometheus.MustRegister(workersOnline)
 	prometheus.MustRegister(queueDepth)
+	prometheus.MustRegister(masterIsLeader)
 }
 
 // --- MODELS ---
@@ -97,13 +104,26 @@ type Worker struct {
 
 // --- MASTER SERVER ---
 
+type cronEntryCache struct {
+	entryID  cron.EntryID
+	cronSpec string
+	command  string
+}
+
 type KazeMaster struct {
 	pb.UnimplementedKazeServiceServer
 	db         *gorm.DB
 	redis      *redis.Client
-	cron       *cron.Cron
+	id         string
 	mu         sync.RWMutex
 	workers    map[string]*Worker
+	
+	// Leadership variables
+	isLeader     bool
+	leaderCtx    context.Context
+	leaderCancel context.CancelFunc
+	leaderCron   *cron.Cron
+	cronEntries  map[string]cronEntryCache // jobID -> cronEntryCache for tracking scheduled cron jobs
 	
 	// Log broadcasting: job_id -> map[subscriber_id]chan *pb.LogFrame
 	logSubscribers sync.Map 
@@ -111,10 +131,11 @@ type KazeMaster struct {
 
 func NewKazeMaster(db *gorm.DB, rdb *redis.Client) *KazeMaster {
 	m := &KazeMaster{
-		db:      db,
-		redis:   rdb,
-		cron:    cron.New(),
-		workers: make(map[string]*Worker),
+		db:          db,
+		redis:       rdb,
+		id:          "master-" + uuid.New().String(),
+		workers:     make(map[string]*Worker),
+		cronEntries: make(map[string]cronEntryCache),
 	}
 	
 	var dbWorkers []Worker
@@ -123,10 +144,12 @@ func NewKazeMaster(db *gorm.DB, rdb *redis.Client) *KazeMaster {
 		m.workers[w.ID] = &w
 	}
 
-	m.cron.Start()
-	go m.workerHealthCheck()
-	go m.jobDispatcher()
+	// Metrics update loop runs on all masters (online/standby)
 	go m.metricsUpdater()
+
+	// Start leadership election loop in the background
+	go m.electionLoop()
+
 	return m
 }
 
@@ -206,6 +229,186 @@ func (m *KazeMaster) DeregisterWorker(ctx context.Context, req *pb.DeregisterReq
 	return &pb.DeregisterResponse{Success: false}, nil
 }
 
+// --- LEADER ELECTION & SYNC LOGIC ---
+
+func (m *KazeMaster) electionLoop() {
+	ticker := time.NewTicker(3 * time.Second)
+	lockKey := "kaze:master:leader"
+	ttl := 10 * time.Second
+
+	for range ticker.C {
+		ctx := context.Background()
+		m.mu.RLock()
+		leading := m.isLeader
+		m.mu.RUnlock()
+
+		if leading {
+			// Lua script to renew the lock TTL atomically if we still own it
+			renewScript := `
+				if redis.call("get", KEYS[1]) == ARGV[1] then
+					return redis.call("pexpire", KEYS[1], ARGV[2])
+				else
+					return 0
+				end
+			`
+			res, err := m.redis.Eval(ctx, renewScript, []string{lockKey}, m.id, int(ttl.Milliseconds())).Int()
+			if err != nil || res == 0 {
+				log.Printf("Master %s failed to renew leadership lock. Demoting to standby...", m.id)
+				m.stopLeading()
+			}
+		} else {
+			// Try to acquire leadership lock
+			ok, err := m.redis.SetNX(ctx, lockKey, m.id, ttl).Result()
+			if err == nil && ok {
+				m.startLeading()
+			} else {
+				// Ensure metric says we are standby
+				masterIsLeader.Set(0)
+			}
+		}
+	}
+}
+
+func (m *KazeMaster) startLeading() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.isLeader {
+		return
+	}
+	m.isLeader = true
+	log.Printf("Master %s gained leadership! Starting leader loops...", m.id)
+	masterIsLeader.Set(1)
+
+	m.leaderCtx, m.leaderCancel = context.WithCancel(context.Background())
+	m.leaderCron = cron.New()
+	m.leaderCron.Start()
+
+	m.cronEntries = make(map[string]cronEntryCache)
+
+	go m.jobDispatcher(m.leaderCtx)
+	go m.workerHealthCheck(m.leaderCtx)
+	go m.cronSyncLoop(m.leaderCtx)
+}
+
+func (m *KazeMaster) stopLeading() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isLeader {
+		return
+	}
+	m.isLeader = false
+	log.Printf("Master %s lost leadership! Stopping leader loops...", m.id)
+	masterIsLeader.Set(0)
+
+	if m.leaderCron != nil {
+		m.leaderCron.Stop()
+		m.leaderCron = nil
+	}
+
+	if m.leaderCancel != nil {
+		m.leaderCancel()
+		m.leaderCancel = nil
+	}
+}
+
+func (m *KazeMaster) cronSyncLoop(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	// Run initial sync immediately
+	m.syncCronJobs()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.syncCronJobs()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (m *KazeMaster) syncCronJobs() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isLeader || m.leaderCron == nil {
+		return
+	}
+
+	var dbCronJobs []Job
+	if err := m.db.Where("cron_spec != ''").Find(&dbCronJobs).Error; err != nil {
+		log.Printf("CronSync: failed to fetch cron jobs from database: %v", err)
+		return
+	}
+
+	activeJobIDs := make(map[string]bool)
+
+	for _, job := range dbCronJobs {
+		activeJobIDs[job.ID] = true
+		cache, exists := m.cronEntries[job.ID]
+
+		if !exists {
+			jobCopy := job
+			entryID, err := m.leaderCron.AddFunc(job.CronSpec, func() {
+				m.handleCronTrigger(&jobCopy)
+			})
+			if err != nil {
+				log.Printf("CronSync: failed to schedule job %s with spec '%s': %v", job.ID, job.CronSpec, err)
+				continue
+			}
+			m.cronEntries[job.ID] = cronEntryCache{
+				entryID:  entryID,
+				cronSpec: job.CronSpec,
+				command:  job.Command,
+			}
+			log.Printf("CronSync: scheduled job %s ('%s') with spec '%s'", job.ID, job.Command, job.CronSpec)
+		} else if cache.cronSpec != job.CronSpec || cache.command != job.Command {
+			m.leaderCron.Remove(cache.entryID)
+			
+			jobCopy := job
+			entryID, err := m.leaderCron.AddFunc(job.CronSpec, func() {
+				m.handleCronTrigger(&jobCopy)
+			})
+			if err != nil {
+				log.Printf("CronSync: failed to reschedule job %s: %v", job.ID, err)
+				delete(m.cronEntries, job.ID)
+				continue
+			}
+			m.cronEntries[job.ID] = cronEntryCache{
+				entryID:  entryID,
+				cronSpec: job.CronSpec,
+				command:  job.Command,
+			}
+			log.Printf("CronSync: updated job %s schedule ('%s') to spec '%s'", job.ID, job.Command, job.CronSpec)
+		}
+	}
+
+	for id, cache := range m.cronEntries {
+		if !activeJobIDs[id] {
+			m.leaderCron.Remove(cache.entryID)
+			delete(m.cronEntries, id)
+			log.Printf("CronSync: removed job %s from scheduler", id)
+		}
+	}
+}
+
+func (m *KazeMaster) Shutdown() {
+	m.stopLeading()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	
+	releaseScript := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+		else
+			return 0
+		end
+	`
+	m.redis.Eval(ctx, releaseScript, []string{"kaze:master:leader"}, m.id)
+}
+
 func (m *KazeMaster) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest) (*pb.ListWorkersResponse, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -248,16 +451,6 @@ func (m *KazeMaster) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.Job
 
 	if err := m.db.Create(job).Error; err != nil {
 		return nil, err
-	}
-
-	if req.CronSpec != "" {
-		_, err := m.cron.AddFunc(req.CronSpec, func() {
-			m.handleCronTrigger(job)
-		})
-		if err != nil {
-			log.Printf("Failed to schedule cron job: %v", err)
-			return nil, err
-		}
 	}
 
 	return &pb.JobResponse{
@@ -414,30 +607,42 @@ func (m *KazeMaster) handleCronTrigger(jobTemplate *Job) {
 	log.Printf("Cron triggered! New job ID: %s", jobID)
 }
 
-func (m *KazeMaster) workerHealthCheck() {
+func (m *KazeMaster) workerHealthCheck(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
-	for range ticker.C {
-		m.mu.Lock()
-		for id, w := range m.workers {
-			if time.Since(w.LastHeartbeat) > 30*time.Second {
-				if w.Status != "OFFLINE" {
-					log.Printf("Worker %s timed out, marking OFFLINE", id)
-					w.Status = "OFFLINE"
-					m.db.Model(w).Update("status", "OFFLINE")
-					
-					m.db.Model(&Job{}).Where("worker_id = ? AND status = ?", id, "RUNNING").
-						Updates(map[string]interface{}{"status": "QUEUED", "worker_id": ""})
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.mu.Lock()
+			for id, w := range m.workers {
+				if time.Since(w.LastHeartbeat) > 30*time.Second {
+					if w.Status != "OFFLINE" {
+						log.Printf("Worker %s timed out, marking OFFLINE", id)
+						w.Status = "OFFLINE"
+						m.db.Model(w).Update("status", "OFFLINE")
+						
+						m.db.Model(&Job{}).Where("worker_id = ? AND status IN ?", id, []string{"ASSIGNED", "RUNNING"}).
+							Updates(map[string]interface{}{"status": "QUEUED", "worker_id": ""})
+					}
 				}
 			}
+			m.mu.Unlock()
+		case <-ctx.Done():
+			return
 		}
-		m.mu.Unlock()
 	}
 }
 
-func (m *KazeMaster) jobDispatcher() {
+func (m *KazeMaster) jobDispatcher(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
-	for range ticker.C {
-		m.dispatchJobsOnce()
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.dispatchJobsOnce()
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -693,10 +898,14 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
 
 	// 2. Metrics Server
+	metricsAddr := os.Getenv("KAZE_METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9090"
+	}
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		log.Printf("Metrics available at :9090/metrics")
-		if err := http.ListenAndServe(":9090", nil); err != nil {
+		log.Printf("Metrics available at %s/metrics", metricsAddr)
+		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
 			log.Printf("Metrics server failed: %v", err)
 		}
 	}()
@@ -707,7 +916,11 @@ func main() {
 		log.Fatalf("failed to load TLS credentials: %v", err)
 	}
 
-	lis, err := net.Listen("tcp", ":50051")
+	masterAddr := os.Getenv("KAZE_MASTER_ADDR")
+	if masterAddr == "" {
+		masterAddr = ":50051"
+	}
+	lis, err := net.Listen("tcp", masterAddr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -727,7 +940,7 @@ func main() {
 		<-sigCh
 		log.Println("Shutting down Kaze Master...")
 		
-		master.cron.Stop()
+		master.Shutdown()
 		s.GracefulStop()
 		os.Exit(0)
 	}()
