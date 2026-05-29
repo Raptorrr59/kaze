@@ -19,15 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KazeService_RegisterWorker_FullMethodName  = "/kaze.KazeService/RegisterWorker"
-	KazeService_Heartbeat_FullMethodName       = "/kaze.KazeService/Heartbeat"
-	KazeService_SubmitJob_FullMethodName       = "/kaze.KazeService/SubmitJob"
-	KazeService_StreamLogs_FullMethodName      = "/kaze.KazeService/StreamLogs"
-	KazeService_ListWorkers_FullMethodName     = "/kaze.KazeService/ListWorkers"
-	KazeService_GetJobStatus_FullMethodName    = "/kaze.KazeService/GetJobStatus"
-	KazeService_ListJobs_FullMethodName        = "/kaze.KazeService/ListJobs"
-	KazeService_UpdateJobStatus_FullMethodName = "/kaze.KazeService/UpdateJobStatus"
-	KazeService_WatchLogs_FullMethodName       = "/kaze.KazeService/WatchLogs"
+	KazeService_RegisterWorker_FullMethodName   = "/kaze.KazeService/RegisterWorker"
+	KazeService_Heartbeat_FullMethodName        = "/kaze.KazeService/Heartbeat"
+	KazeService_SubmitJob_FullMethodName        = "/kaze.KazeService/SubmitJob"
+	KazeService_StreamLogs_FullMethodName       = "/kaze.KazeService/StreamLogs"
+	KazeService_ListWorkers_FullMethodName      = "/kaze.KazeService/ListWorkers"
+	KazeService_GetJobStatus_FullMethodName     = "/kaze.KazeService/GetJobStatus"
+	KazeService_ListJobs_FullMethodName         = "/kaze.KazeService/ListJobs"
+	KazeService_UpdateJobStatus_FullMethodName  = "/kaze.KazeService/UpdateJobStatus"
+	KazeService_WatchLogs_FullMethodName        = "/kaze.KazeService/WatchLogs"
+	KazeService_DeregisterWorker_FullMethodName = "/kaze.KazeService/DeregisterWorker"
 )
 
 // KazeServiceClient is the client API for KazeService service.
@@ -54,6 +55,8 @@ type KazeServiceClient interface {
 	UpdateJobStatus(ctx context.Context, in *UpdateJobStatusRequest, opts ...grpc.CallOption) (*UpdateJobStatusResponse, error)
 	// Client -> Master: Watch logs of a specific job in real-time
 	WatchLogs(ctx context.Context, in *WatchLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogFrame], error)
+	// Worker -> Master: Gracefully announce shutdown / deregistration
+	DeregisterWorker(ctx context.Context, in *DeregisterRequest, opts ...grpc.CallOption) (*DeregisterResponse, error)
 }
 
 type kazeServiceClient struct {
@@ -166,6 +169,16 @@ func (c *kazeServiceClient) WatchLogs(ctx context.Context, in *WatchLogsRequest,
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KazeService_WatchLogsClient = grpc.ServerStreamingClient[LogFrame]
 
+func (c *kazeServiceClient) DeregisterWorker(ctx context.Context, in *DeregisterRequest, opts ...grpc.CallOption) (*DeregisterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeregisterResponse)
+	err := c.cc.Invoke(ctx, KazeService_DeregisterWorker_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KazeServiceServer is the server API for KazeService service.
 // All implementations must embed UnimplementedKazeServiceServer
 // for forward compatibility.
@@ -190,6 +203,8 @@ type KazeServiceServer interface {
 	UpdateJobStatus(context.Context, *UpdateJobStatusRequest) (*UpdateJobStatusResponse, error)
 	// Client -> Master: Watch logs of a specific job in real-time
 	WatchLogs(*WatchLogsRequest, grpc.ServerStreamingServer[LogFrame]) error
+	// Worker -> Master: Gracefully announce shutdown / deregistration
+	DeregisterWorker(context.Context, *DeregisterRequest) (*DeregisterResponse, error)
 	mustEmbedUnimplementedKazeServiceServer()
 }
 
@@ -226,6 +241,9 @@ func (UnimplementedKazeServiceServer) UpdateJobStatus(context.Context, *UpdateJo
 }
 func (UnimplementedKazeServiceServer) WatchLogs(*WatchLogsRequest, grpc.ServerStreamingServer[LogFrame]) error {
 	return status.Error(codes.Unimplemented, "method WatchLogs not implemented")
+}
+func (UnimplementedKazeServiceServer) DeregisterWorker(context.Context, *DeregisterRequest) (*DeregisterResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeregisterWorker not implemented")
 }
 func (UnimplementedKazeServiceServer) mustEmbedUnimplementedKazeServiceServer() {}
 func (UnimplementedKazeServiceServer) testEmbeddedByValue()                     {}
@@ -392,6 +410,24 @@ func _KazeService_WatchLogs_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KazeService_WatchLogsServer = grpc.ServerStreamingServer[LogFrame]
 
+func _KazeService_DeregisterWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeregisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KazeServiceServer).DeregisterWorker(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KazeService_DeregisterWorker_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KazeServiceServer).DeregisterWorker(ctx, req.(*DeregisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KazeService_ServiceDesc is the grpc.ServiceDesc for KazeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -426,6 +462,10 @@ var KazeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateJobStatus",
 			Handler:    _KazeService_UpdateJobStatus_Handler,
+		},
+		{
+			MethodName: "DeregisterWorker",
+			Handler:    _KazeService_DeregisterWorker_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -16,7 +16,7 @@ all: build
 
 proto:
 	@echo "Generating gRPC code..."
-	$(PROTOC) --go_out=. --go_opt=paths=source_relative \
+	PATH=$$PATH:$(shell go env GOPATH)/bin $(PROTOC) --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		$(PROTO_DIR)/kaze.proto
 

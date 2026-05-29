@@ -31,6 +31,9 @@ type Worker struct {
 	client     pb.KazeServiceClient
 	docker     *client.Client
 	logStream  pb.KazeService_StreamLogsClient
+	activeJobs sync.Map // Map[string]context.CancelFunc
+	mu         sync.Mutex
+	isDraining bool
 }
 
 func getSystemCapacity() (int32, int64, error) {
@@ -167,8 +170,54 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Println("Worker shutting down...")
-		// Here we could notify master or wait for jobs
+		log.Println("Worker initiating graceful shutdown...")
+
+		w.mu.Lock()
+		w.isDraining = true
+		w.mu.Unlock()
+
+		// Call DeregisterWorker RPC to Master
+		deregCtx, deregCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer deregCancel()
+		_, err := w.client.DeregisterWorker(deregCtx, &pb.DeregisterRequest{WorkerId: w.id})
+		if err != nil {
+			log.Printf("Warning: Failed to deregister from Master: %v", err)
+		} else {
+			log.Println("Deregistered from Master successfully.")
+		}
+
+		// Wait for currently executing tasks to complete
+		log.Println("Waiting for running tasks to complete...")
+		waitChan := make(chan struct{})
+		go func() {
+			for {
+				count := 0
+				w.activeJobs.Range(func(key, value interface{}) bool {
+					count++
+					return true
+				})
+				if count == 0 {
+					close(waitChan)
+					return
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+		}()
+
+		select {
+		case <-waitChan:
+			log.Println("All tasks completed. Graceful shutdown finished.")
+		case <-time.After(30 * time.Second):
+			log.Println("Graceful shutdown timeout exceeded. Force-cancelling remaining tasks...")
+			w.activeJobs.Range(func(key, value interface{}) bool {
+				cancelFunc := value.(context.CancelFunc)
+				cancelFunc()
+				log.Printf("Force-cancelled task: %v", key)
+				return true
+			})
+			time.Sleep(1 * time.Second)
+		}
+
 		os.Exit(0)
 	}()
 
@@ -212,13 +261,27 @@ func (w *Worker) heartbeatLoop() {
 func (w *Worker) pollJobs() {
 	ticker := time.NewTicker(3 * time.Second)
 	for range ticker.C {
+		w.mu.Lock()
+		draining := w.isDraining
+		w.mu.Unlock()
+		if draining {
+			continue
+		}
+
 		resp, err := w.client.ListJobs(context.Background(), &pb.ListJobsRequest{})
 		if err != nil {
 			continue
 		}
 
 		for _, job := range resp.Jobs {
-			if job.Status == "ASSIGNED" {
+			if job.Status == "ASSIGNED" && job.WorkerId == w.id {
+				w.mu.Lock()
+				if w.isDraining {
+					w.mu.Unlock()
+					continue
+				}
+				w.mu.Unlock()
+
 				fullJob, err := w.client.GetJobStatus(context.Background(), &pb.GetJobStatusRequest{JobId: job.JobId})
 				if err == nil && fullJob.Status == "ASSIGNED" {
 					go w.executeJob(fullJob)
@@ -229,20 +292,29 @@ func (w *Worker) pollJobs() {
 }
 
 func (w *Worker) executeJob(job *pb.JobStatusResponse) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w.activeJobs.Store(job.JobId, cancel)
+	defer w.activeJobs.Delete(job.JobId)
+
 	log.Printf("Executing job %s: %s", job.JobId, job.Command)
 	
-	w.client.UpdateJobStatus(context.Background(), &pb.UpdateJobStatusRequest{
-		JobId:  job.JobId,
-		Status: "RUNNING",
+	_, err := w.client.UpdateJobStatus(ctx, &pb.UpdateJobStatusRequest{
+		JobId:    job.JobId,
+		Status:   "RUNNING",
+		WorkerId: w.id,
 	})
+	if err != nil {
+		log.Printf("Failed to update status to RUNNING for job %s: %v", job.JobId, err)
+	}
 
 	var result string
-	var err error
 
 	if job.Image != "" && w.docker != nil {
-		result, err = w.executeDocker(job.JobId, job.Image, job.Command)
+		result, err = w.executeDocker(ctx, job.JobId, job.Image, job.Command)
 	} else {
-		result, err = w.executeShell(job.JobId, job.Command)
+		result, err = w.executeShell(ctx, job.JobId, job.Command)
 	}
 
 	status := "COMPLETED"
@@ -252,9 +324,10 @@ func (w *Worker) executeJob(job *pb.JobStatusResponse) {
 	}
 
 	w.client.UpdateJobStatus(context.Background(), &pb.UpdateJobStatusRequest{
-		JobId:  job.JobId,
-		Status: status,
-		Result: result,
+		JobId:    job.JobId,
+		Status:   status,
+		Result:   result,
+		WorkerId: w.id,
 	})
 }
 
@@ -270,8 +343,8 @@ func (w *Worker) sendLogFrame(jobID, data, streamType string) {
 	})
 }
 
-func (w *Worker) executeShell(jobID, cmdStr string) (string, error) {
-	cmd := exec.Command("sh", "-c", cmdStr)
+func (w *Worker) executeShell(ctx context.Context, jobID, cmdStr string) (string, error) {
+	cmd := exec.CommandContext(ctx, "sh", "-c", cmdStr)
 	
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
@@ -311,9 +384,7 @@ func (w *Worker) executeShell(jobID, cmdStr string) (string, error) {
 	return string(fullOutput), err
 }
 
-func (w *Worker) executeDocker(jobID, imageName, cmdStr string) (string, error) {
-	ctx := context.Background()
-	
+func (w *Worker) executeDocker(ctx context.Context, jobID, imageName, cmdStr string) (string, error) {
 	reader, err := w.docker.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
 		return "", err
@@ -329,13 +400,19 @@ func (w *Worker) executeDocker(jobID, imageName, cmdStr string) (string, error) 
 		return "", err
 	}
 
+	defer func() {
+		removeCtx := context.Background()
+		w.docker.ContainerStop(removeCtx, createResp.ID, container.StopOptions{})
+		w.docker.ContainerRemove(removeCtx, createResp.ID, container.RemoveOptions{Force: true})
+	}()
+
 	if err := w.docker.ContainerStart(ctx, createResp.ID, container.StartOptions{}); err != nil {
 		return "", err
 	}
 
 	// Stream logs in real-time
 	go func() {
-		out, err := w.docker.ContainerLogs(ctx, createResp.ID, container.LogsOptions{
+		out, err := w.docker.ContainerLogs(context.Background(), createResp.ID, container.LogsOptions{
 			ShowStdout: true, 
 			ShowStderr: true, 
 			Follow:     true,
@@ -345,7 +422,6 @@ func (w *Worker) executeDocker(jobID, imageName, cmdStr string) (string, error) 
 		}
 		defer out.Close()
 		
-		// Docker logs have a header we should ideally strip, but for simplicity:
 		scanner := bufio.NewScanner(out)
 		for scanner.Scan() {
 			w.sendLogFrame(jobID, scanner.Text()+"\n", "stdout")
@@ -362,13 +438,12 @@ func (w *Worker) executeDocker(jobID, imageName, cmdStr string) (string, error) 
 	}
 
 	// Final result capture
-	out, err := w.docker.ContainerLogs(ctx, createResp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true})
+	out, err := w.docker.ContainerLogs(context.Background(), createResp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true})
 	if err != nil {
 		return "", err
 	}
 	defer out.Close()
 	logBytes, _ := io.ReadAll(out)
 	
-	w.docker.ContainerRemove(ctx, createResp.ID, container.RemoveOptions{})
 	return string(logBytes), nil
 }

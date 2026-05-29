@@ -178,6 +178,34 @@ func (m *KazeMaster) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*
 	return &pb.HeartbeatResponse{Ok: false}, nil
 }
 
+func (m *KazeMaster) DeregisterWorker(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	log.Printf("Deregistering worker: %s", req.WorkerId)
+
+	if w, ok := m.workers[req.WorkerId]; ok {
+		w.Status = "OFFLINE"
+		w.LastHeartbeat = time.Now()
+		m.db.Model(w).Updates(map[string]interface{}{
+			"status":         "OFFLINE",
+			"last_heartbeat": w.LastHeartbeat,
+		})
+
+		// Reschedule running/assigned jobs
+		err := m.db.Model(&Job{}).
+			Where("worker_id = ? AND status IN ?", req.WorkerId, []string{"ASSIGNED", "RUNNING"}).
+			Updates(map[string]interface{}{"status": "QUEUED", "worker_id": ""}).Error
+		if err != nil {
+			log.Printf("Failed to reschedule jobs for deregistered worker %s: %v", req.WorkerId, err)
+		}
+
+		return &pb.DeregisterResponse{Success: true}, nil
+	}
+
+	return &pb.DeregisterResponse{Success: false}, nil
+}
+
 func (m *KazeMaster) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest) (*pb.ListWorkersResponse, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -255,6 +283,7 @@ func (m *KazeMaster) GetJobStatus(ctx context.Context, req *pb.GetJobStatusReque
 		RequiredCpu:   job.RequiredCpu,
 		RequiredRamMb: job.RequiredRamMb,
 		RequiredTags:  job.RequiredTags,
+		WorkerId:      job.WorkerID,
 	}, nil
 }
 
@@ -275,6 +304,7 @@ func (m *KazeMaster) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb
 			RequiredCpu:   job.RequiredCpu,
 			RequiredRamMb: job.RequiredRamMb,
 			RequiredTags:  job.RequiredTags,
+			WorkerId:      job.WorkerID,
 		})
 	}
 	return resp, nil
@@ -283,7 +313,18 @@ func (m *KazeMaster) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb
 func (m *KazeMaster) UpdateJobStatus(ctx context.Context, req *pb.UpdateJobStatusRequest) (*pb.UpdateJobStatusResponse, error) {
 	sanitizedResult := strings.ReplaceAll(req.Result, "\x00", "")
 
-	err := m.db.Model(&Job{}).Where("id = ?", req.JobId).Updates(map[string]interface{}{
+	var job Job
+	if err := m.db.First(&job, "id = ?", req.JobId).Error; err != nil {
+		return &pb.UpdateJobStatusResponse{Success: false}, err
+	}
+
+	if req.WorkerId != "" && job.WorkerID != req.WorkerId {
+		log.Printf("Rejecting UpdateJobStatus for job %s: requested by worker %s, but job is currently assigned to worker %s",
+			req.JobId, req.WorkerId, job.WorkerID)
+		return &pb.UpdateJobStatusResponse{Success: false}, fmt.Errorf("job assigned to a different worker")
+	}
+
+	err := m.db.Model(&job).Updates(map[string]interface{}{
 		"status": req.Status,
 		"result": sanitizedResult,
 	}).Error
@@ -578,12 +619,12 @@ func authorizeClient(ctx context.Context, fullMethod string) (context.Context, e
 
 	clientCert := tlsInfo.State.VerifiedChains[0][0]
 	cn := clientCert.Subject.CommonName
-
 	workerMethods := map[string]bool{
-		"/kaze.KazeService/RegisterWorker":  true,
-		"/kaze.KazeService/Heartbeat":       true,
-		"/kaze.KazeService/UpdateJobStatus": true,
-		"/kaze.KazeService/StreamLogs":      true,
+		"/kaze.KazeService/RegisterWorker":   true,
+		"/kaze.KazeService/Heartbeat":        true,
+		"/kaze.KazeService/UpdateJobStatus":  true,
+		"/kaze.KazeService/StreamLogs":       true,
+		"/kaze.KazeService/DeregisterWorker": true,
 	}
 
 	clientMethods := map[string]bool{

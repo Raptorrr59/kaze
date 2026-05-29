@@ -32,6 +32,9 @@ service KazeService {
 
     // Client -> Master: Watch logs of a specific job in real-time
     rpc WatchLogs(WatchLogsRequest) returns (stream LogFrame);
+
+    // Worker -> Master: Gracefully announce shutdown / deregistration
+    rpc DeregisterWorker(DeregisterRequest) returns (DeregisterResponse);
 }
 
 // --- MESSAGES ---
@@ -54,6 +57,7 @@ message UpdateJobStatusRequest {
     string job_id = 1;
     string status = 2;
     string result = 3;
+    string worker_id = 4;
 }
 
 message UpdateJobStatusResponse {
@@ -71,6 +75,7 @@ message JobStatusResponse {
     float required_cpu = 8;
     int64 required_ram_mb = 9;
     map<string, string> required_tags = 10;
+    string worker_id = 11;
 }
 
 message ListWorkersRequest {}
@@ -139,4 +144,12 @@ message LogFrame {
 
 message LogControl {
     bool stop = 1;
+}
+
+message DeregisterRequest {
+    string worker_id = 1;
+}
+
+message DeregisterResponse {
+    bool success = 1;
 }

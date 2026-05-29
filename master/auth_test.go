@@ -50,6 +50,7 @@ func TestAuthorizeClient_WorkerOnlyMethods(t *testing.T) {
 		"/kaze.KazeService/Heartbeat",
 		"/kaze.KazeService/UpdateJobStatus",
 		"/kaze.KazeService/StreamLogs",
+		"/kaze.KazeService/DeregisterWorker",
 	}
 
 	for _, m := range methods {
